@@ -41,6 +41,26 @@ test('loads a deterministic desktop arena and preserves it when reset is cancell
   await expect(game).toHaveAttribute('data-phase', 'aiming');
 });
 
+test('mutes game audio and preserves the preference across reloads', async ({
+  page,
+}) => {
+  await page.goto('/?seed=4242');
+  const mute = page.getByRole('button', { name: 'Mute game audio' });
+  await expect(mute).toHaveAttribute('aria-pressed', 'true');
+
+  await mute.click();
+  const unmute = page.getByRole('button', { name: 'Turn on game audio' });
+  await expect(unmute).toHaveAttribute('aria-pressed', 'false');
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('gorillas:sound')))
+    .toBe('off');
+
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Turn on game audio' }),
+  ).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('registers WebMCP tools and rejects invalid throws without changing the match', async ({
   page,
 }) => {

@@ -28,6 +28,7 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from '@/lib/game/render';
+import { GameAudio } from '@/lib/game/audio';
 import { loadTheme, type GameTheme } from '@/lib/game/theme';
 
 const FIXED_TIMESTEP = 1 / 120;
@@ -104,10 +105,17 @@ export function GorillasGame() {
   const pointerRef = useRef<Point | null>(null);
   const resetOpenRef = useRef(false);
   const snapshotKeyRef = useRef('');
+  const audioRef = useRef<GameAudio | null>(null);
   const [theme, setTheme] = useState<GameTheme | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [ui, setUi] = useState<UiSnapshot>(() => snapshot(INITIAL_GAME));
+
+  const getAudio = useCallback(() => {
+    audioRef.current ??= new GameAudio();
+    return audioRef.current;
+  }, []);
 
   const syncUi = useCallback(() => {
     const next = snapshot(gameRef.current);
@@ -131,6 +139,26 @@ export function GorillasGame() {
   }, [resetOpen]);
 
   useEffect(() => {
+    const audio = getAudio();
+    const enabled = window.localStorage.getItem('gorillas:sound') !== 'off';
+    audio.setEnabled(enabled);
+    const preferenceFrame = window.requestAnimationFrame(() =>
+      setSoundEnabled(enabled),
+    );
+
+    const unlockAudio = () => void audio.unlock();
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.cancelAnimationFrame(preferenceFrame);
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      audio.destroy();
+      if (audioRef.current === audio) audioRef.current = null;
+    };
+  }, [getAudio]);
+
+  useEffect(() => {
     if (!theme) return;
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
@@ -146,7 +174,19 @@ export function GorillasGame() {
       if (!resetOpenRef.current) {
         accumulator += frameDelta;
         while (accumulator >= FIXED_TIMESTEP) {
-          gameRef.current = stepGame(gameRef.current, FIXED_TIMESTEP);
+          const previous = gameRef.current;
+          const next = stepGame(previous, FIXED_TIMESTEP);
+          gameRef.current = next;
+          if (next.match.phase !== previous.match.phase) {
+            if (next.match.phase === 'impact' && next.match.explosion) {
+              getAudio().playExplosion(next.match.explosion.kind);
+            } else if (
+              next.match.phase === 'victory' &&
+              next.match.winner !== null
+            ) {
+              getAudio().playVictory(next.match.winner);
+            }
+          }
           accumulator -= FIXED_TIMESTEP;
         }
       }
@@ -162,7 +202,7 @@ export function GorillasGame() {
 
     animationFrame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrame);
-  }, [syncUi, theme]);
+  }, [getAudio, syncUi, theme]);
 
   const beginRematch = useCallback(() => {
     gameRef.current = startRematch(gameRef.current);
@@ -281,6 +321,7 @@ export function GorillasGame() {
           throw new Error('The drag was too short to launch a banana.');
         }
         gameRef.current = next;
+        getAudio().playShot();
         aimingRef.current = false;
         pointerRef.current = null;
         syncUi();
@@ -296,7 +337,7 @@ export function GorillasGame() {
     });
 
     return () => lifecycle.abort();
-  }, [syncUi]);
+  }, [getAudio, syncUi]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -367,6 +408,24 @@ export function GorillasGame() {
         <span className="player-two">P2</span>
       </div>
 
+      <button
+        type="button"
+        className="sound-toggle"
+        aria-label={soundEnabled ? 'Mute game audio' : 'Turn on game audio'}
+        aria-pressed={soundEnabled}
+        onClick={() => {
+          const audio = getAudio();
+          const next = !audio.isEnabled;
+          audio.setEnabled(next);
+          setSoundEnabled(next);
+          window.localStorage.setItem('gorillas:sound', next ? 'on' : 'off');
+          if (next) void audio.unlock();
+        }}
+      >
+        <span aria-hidden="true">{soundEnabled ? '♪' : '×'}</span>
+        {soundEnabled ? 'SOUND ON' : 'SOUND OFF'}
+      </button>
+
       {!theme ? (
         <div className="load-state" aria-live="polite">
           <strong>BUILDING CITY</strong>
@@ -402,7 +461,10 @@ export function GorillasGame() {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
           }
-          gameRef.current = launchBanana(gameRef.current, point);
+          const previous = gameRef.current;
+          const next = launchBanana(previous, point);
+          gameRef.current = next;
+          if (next !== previous) getAudio().playShot();
           aimingRef.current = false;
           pointerRef.current = null;
           syncUi();
