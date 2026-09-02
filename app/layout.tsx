@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    'https://gorillas-rooftop-artillery.miguel-garcia744864.chatgpt.site',
+  ),
   title: 'Gorillas — Rooftop Artillery',
   description:
     'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
