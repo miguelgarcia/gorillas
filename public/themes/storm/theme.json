@@ -87,5 +87,21 @@
         "DDDDDDDDD......."
       ]
     }
+  },
+  "gorillaSheet": {
+    "src": "/themes/storm/gorillas.png",
+    "columns": 5,
+    "rows": 2,
+    "frames": {
+      "idle": 0,
+      "aim": 1,
+      "throw": 2,
+      "victory": 3,
+      "hit": 4
+    },
+    "playerRows": [0, 1],
+    "baselineOffsets": [0.13, 0.24],
+    "renderWidth": 104,
+    "renderHeight": 155
   }
 }

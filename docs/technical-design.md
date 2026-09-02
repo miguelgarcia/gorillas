@@ -67,6 +67,7 @@ This separation keeps gameplay testable and makes future remote multiplayer poss
 - Scale the backing canvas for device-pixel ratio while retaining world-space simulation coordinates.
 - Layer order: sky, clouds, background city, destructible buildings, rooftop details, gorillas/projectile/effects, aiming ring, DOM overlays.
 - Each theme manifest maps semantic asset roles and animation states to files, anchors, palettes, and timing data.
+- Character art is loaded from a theme-owned sprite sheet with distinct idle, aim, throw, victory, and hit frames for each player; the ASCII sprite remains only as a load-safe fallback.
 - Hitboxes and gameplay dimensions belong to the core, never to theme sprites.
 - Switching the configured theme manifest requires no gameplay-code changes.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_CONFIG } from './core';
-import { getFlagMotion } from './render';
+import { createGame, GAME_CONFIG } from './core';
+import { getFlagMotion, getGorillaPose } from './render';
 
 describe('flag motion', () => {
   it('hangs slack in calm air and waves faster as the wind strengthens', () => {
@@ -27,5 +27,38 @@ describe('flag motion', () => {
     expect(getFlagMotion(GAME_CONFIG.windMax * 3)).toEqual(
       getFlagMotion(GAME_CONFIG.windMax),
     );
+  });
+});
+
+describe('gorilla poses', () => {
+  it('maps the active player through aiming and throwing poses', () => {
+    const game = createGame(4242);
+    const active = game.match.gorillas[game.match.activePlayer];
+    expect(getGorillaPose(game, active)).toBe('aim');
+    expect(
+      getGorillaPose(
+        {
+          ...game,
+          match: { ...game.match, phase: 'projectile-flight' },
+        },
+        active,
+      ),
+    ).toBe('throw');
+  });
+
+  it('uses victory and hit artwork only for the affected gorilla', () => {
+    const game = createGame(1717);
+    const winner = game.match.gorillas[0];
+    const defeated = { ...game.match.gorillas[1], alive: false };
+    expect(
+      getGorillaPose(
+        {
+          ...game,
+          match: { ...game.match, phase: 'victory', winner: winner.player },
+        },
+        winner,
+      ),
+    ).toBe('victory');
+    expect(getGorillaPose(game, defeated)).toBe('hit');
   });
 });

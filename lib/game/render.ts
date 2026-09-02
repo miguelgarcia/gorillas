@@ -8,7 +8,7 @@ import {
   type Gorilla,
   type Point,
 } from './core';
-import type { GameTheme, PixelSprite } from './theme';
+import type { GameTheme, GorillaPose, PixelSprite } from './theme';
 
 export const VIEW_WIDTH = 1600;
 export const VIEW_HEIGHT = 900;
@@ -93,6 +93,40 @@ function drawPixelSprite(
     });
   });
   context.restore();
+}
+
+function drawGorillaSheetFrame(
+  context: CanvasRenderingContext2D,
+  theme: GameTheme,
+  player: 0 | 1,
+  pose: GorillaPose,
+  position: Point,
+  facing: 1 | -1,
+) {
+  const sheet = theme.gorillaSheet;
+  if (!sheet) return false;
+  const frameWidth = sheet.image.naturalWidth / sheet.columns;
+  const frameHeight = sheet.image.naturalHeight / sheet.rows;
+  const column = sheet.frames[pose];
+  const row = sheet.playerRows[player];
+
+  context.save();
+  context.translate(pixel(position.x, 2), pixel(position.y, 2));
+  context.scale(facing, 1);
+  context.imageSmoothingEnabled = false;
+  context.drawImage(
+    sheet.image,
+    column * frameWidth,
+    row * frameHeight,
+    frameWidth,
+    frameHeight,
+    -sheet.renderWidth / 2,
+    -sheet.renderHeight + sheet.renderHeight * sheet.baselineOffsets[player],
+    sheet.renderWidth,
+    sheet.renderHeight,
+  );
+  context.restore();
+  return true;
 }
 
 type FlagMotion = {
@@ -437,7 +471,11 @@ function drawGorilla(
   theme: GameTheme,
   gorilla: Gorilla,
 ) {
-  if (!gorilla.alive) return;
+  const isHit =
+    !gorilla.alive &&
+    game.match.phase === 'impact' &&
+    game.match.explosion?.kind === 'gorilla';
+  if (!gorilla.alive && !isHit) return;
   const opponent = game.match.gorillas[gorilla.player === 0 ? 1 : 0];
   const facing: 1 | -1 = opponent.x >= gorilla.x ? 1 : -1;
   const isWinner =
@@ -450,20 +488,31 @@ function drawGorilla(
   const teamColor = gorilla.player === 0 ? theme.palette.p1 : theme.palette.p2;
   const bodyColor = gorilla.player === 0 ? '#563528' : '#29333a';
   const shadowColor = gorilla.player === 0 ? '#35231f' : '#182128';
+  const pose = getGorillaPose(game, gorilla);
 
   context.save();
   context.shadowColor = 'rgb(9 15 18 / 0.55)';
   context.shadowBlur = 0;
   context.shadowOffsetX = facing * -4;
   context.shadowOffsetY = 4;
-  drawPixelSprite(context, theme.sprites.gorilla, position, 4, facing, {
-    B: bodyColor,
-    M: shadowColor,
-    A: teamColor,
-  });
+  const usedSheet = drawGorillaSheetFrame(
+    context,
+    theme,
+    gorilla.player,
+    pose,
+    position,
+    facing,
+  );
+  if (!usedSheet) {
+    drawPixelSprite(context, theme.sprites.gorilla, position, 4, facing, {
+      B: bodyColor,
+      M: shadowColor,
+      A: teamColor,
+    });
+  }
   context.restore();
 
-  if (!isWinner) {
+  if (!usedSheet && !isWinner) {
     drawPixelSprite(
       context,
       theme.sprites.banana,
@@ -471,11 +520,22 @@ function drawGorilla(
       2.2,
       facing,
     );
-  } else {
+  } else if (!usedSheet) {
     context.fillStyle = teamColor;
     context.fillRect(position.x - 34, position.y - 55 - dance * 11, 13, 9);
     context.fillRect(position.x + 21, position.y - 55 + dance * 11, 13, 9);
   }
+}
+
+export function getGorillaPose(game: GameState, gorilla: Gorilla): GorillaPose {
+  if (!gorilla.alive) return 'hit';
+  if (game.match.phase === 'victory' && game.match.winner === gorilla.player) {
+    return 'victory';
+  }
+  if (game.match.activePlayer !== gorilla.player) return 'idle';
+  if (game.match.phase === 'aiming') return 'aim';
+  if (game.match.phase === 'projectile-flight') return 'throw';
+  return 'idle';
 }
 
 function drawProjectile(
