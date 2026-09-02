@@ -3,15 +3,15 @@
 @import 'shadcn/tailwind.css';
 
 :root {
-  --sky-deep: #233746;
-  --sky-mid: #536d82;
-  --ink: #edf7f7;
-  --p1: #da6847;
-  --p2: #5ca3b8;
-  --panel: rgb(20 31 39 / 82%);
-  --panel-edge: rgb(220 238 239 / 24%);
-  --focus: #75d5df;
-  --background: #172731;
+  --sky-deep: #192b37;
+  --sky-mid: #526d82;
+  --ink: #f1f7f5;
+  --p1: #e25d3b;
+  --p2: #348dad;
+  --panel: rgb(16 29 38 / 88%);
+  --panel-edge: rgb(226 240 239 / 32%);
+  --focus: #bcebf0;
+  --background: #111d24;
   --foreground: #edf7f7;
   --card: #1b2b34;
   --card-foreground: #edf7f7;
@@ -74,8 +74,8 @@ canvas {
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 15%, rgb(131 160 176 / 28%), transparent 42%),
-    #172731;
+    radial-gradient(circle at 50% 15%, rgb(131 160 176 / 32%), transparent 42%),
+    linear-gradient(145deg, #1c303d, #0b141a 76%);
 }
 
 .game-frame {
@@ -83,9 +83,11 @@ canvas {
   width: min(100vw, calc(100vh * 16 / 9));
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 1px solid var(--panel-edge);
+  border: 2px solid rgb(214 230 231 / 18%);
   background: var(--sky-mid);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 44%);
+  box-shadow:
+    0 28px 90px rgb(0 0 0 / 55%),
+    inset 0 0 0 2px rgb(7 14 18 / 46%);
   image-rendering: pixelated;
 }
 
@@ -110,47 +112,73 @@ canvas {
   left: 50%;
   display: flex;
   align-items: center;
-  gap: clamp(9px, 1.1vw, 18px);
-  padding: clamp(7px, 0.8vw, 12px) clamp(12px, 1.3vw, 22px);
+  gap: clamp(8px, 0.9vw, 14px);
+  padding: clamp(6px, 0.68vw, 10px) clamp(11px, 1.15vw, 19px);
   transform: translateX(-50%);
-  border: 1px solid var(--panel-edge);
-  border-radius: 4px;
-  background: var(--panel);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
-  font-size: clamp(12px, 1.25vw, 20px);
-  letter-spacing: 0.08em;
+  border: 2px solid var(--panel-edge);
+  border-radius: 2px;
+  background:
+    linear-gradient(rgb(255 255 255 / 5%), transparent 42%), var(--panel);
+  box-shadow:
+    5px 5px 0 rgb(9 17 22 / 48%),
+    inset 0 0 0 2px rgb(7 14 18 / 30%);
+  font-size: clamp(11px, 1.08vw, 17px);
+  letter-spacing: 0.1em;
   pointer-events: none;
+  backdrop-filter: blur(5px);
 }
 
 .scoreboard strong {
-  min-width: 1ch;
+  display: grid;
+  min-width: 1.8em;
+  height: 1.8em;
+  place-items: center;
+  border: 1px solid rgb(237 247 247 / 18%);
+  background: rgb(6 13 17 / 38%);
   color: white;
-  font-size: 1.15em;
+  font-size: 1.1em;
   text-align: center;
+  text-shadow: 2px 2px 0 rgb(0 0 0 / 34%);
 }
 
 .player-one {
-  color: #ff9479;
+  color: #ff9a7f;
 }
 
 .player-two {
-  color: #8bd5e5;
+  color: #8ed8e8;
+}
+
+.game-frame[data-active-player='1'] .player-one,
+.game-frame[data-active-player='2'] .player-two {
+  color: white;
+  text-shadow:
+    0 0 10px currentcolor,
+    2px 2px 0 rgb(0 0 0 / 40%);
 }
 
 .control-hint {
   position: absolute;
   z-index: 2;
-  right: 18px;
-  bottom: 16px;
+  right: auto;
+  bottom: 12px;
+  left: 50%;
   margin: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--panel-edge);
-  border-radius: 3px;
-  background: rgb(18 28 35 / 74%);
-  color: rgb(237 247 247 / 78%);
-  font-size: clamp(9px, 0.82vw, 13px);
-  letter-spacing: 0.03em;
+  padding: 5px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgb(220 238 239 / 14%);
+  border-radius: 2px;
+  background: rgb(7 14 18 / 48%);
+  color: rgb(237 247 247 / 7%);
+  font-size: clamp(8px, 0.74vw, 12px);
+  letter-spacing: 0.05em;
   pointer-events: none;
+  transition: color 180ms ease;
+}
+
+.game-frame:hover .control-hint,
+.game-frame:focus-within .control-hint {
+  color: rgb(237 247 247 / 72%);
 }
 
 .load-state {
@@ -181,7 +209,9 @@ canvas {
   width: 100%;
   padding: 0;
   border: 0;
-  background: rgb(13 21 27 / 12%);
+  background:
+    radial-gradient(circle at 50% 46%, transparent 0 21%, rgb(8 15 20 / 20%) 66%),
+    rgb(13 21 27 / 10%);
   color: var(--ink);
   cursor: pointer;
   text-align: center;
@@ -190,11 +220,14 @@ canvas {
 .victory-overlay span {
   display: block;
   padding: clamp(16px, 2vw, 28px) clamp(28px, 4vw, 62px);
-  border: 3px solid rgb(238 249 250 / 76%);
-  background: rgb(18 29 36 / 88%);
+  border: 4px solid rgb(238 249 250 / 84%);
+  background:
+    linear-gradient(rgb(255 255 255 / 6%), transparent 44%),
+    rgb(18 29 36 / 92%);
   box-shadow:
-    8px 8px 0 rgb(13 21 27 / 68%),
-    inset 0 0 0 3px rgb(117 213 223 / 20%);
+    10px 10px 0 rgb(8 15 19 / 72%),
+    inset 0 0 0 3px rgb(117 213 223 / 22%),
+    0 16px 50px rgb(0 0 0 / 28%);
   font-size: clamp(30px, 5vw, 76px);
   font-weight: 900;
   letter-spacing: 0.08em;
