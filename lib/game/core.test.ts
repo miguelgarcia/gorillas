@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GAME_CONFIG,
+  canStartAim,
   carveCrater,
   createGame,
   generateBuildings,
@@ -52,8 +53,11 @@ describe('seeded city generation', () => {
       for (const gorilla of gorillas) {
         const roof = buildings[gorilla.buildingId];
         const clearance = Math.min(
-          gorilla.x - roof.x - GAME_CONFIG.gorillaRadius,
-          roof.x + roof.width - gorilla.x - GAME_CONFIG.gorillaRadius,
+          gorilla.x - roof.x - GAME_CONFIG.gorillaFootprintRadius,
+          roof.x +
+            roof.width -
+            gorilla.x -
+            GAME_CONFIG.gorillaFootprintRadius,
         );
         expect(clearance).toBeGreaterThanOrEqual(
           GAME_CONFIG.gorillaEdgeClearance,
@@ -74,6 +78,23 @@ describe('seeded city generation', () => {
 });
 
 describe('aiming and ballistics', () => {
+  it('accepts a press anywhere inside the visible inner aiming circle', () => {
+    const game = createGame(14);
+    const center = gorillaCenter(game.match.gorillas[game.match.activePlayer]);
+    expect(
+      canStartAim(game, {
+        x: center.x - 1.8,
+        y: center.y - 3.9,
+      }),
+    ).toBe(true);
+    expect(
+      canStartAim(game, {
+        x: center.x + GAME_CONFIG.aimStartRadius + 0.1,
+        y: center.y,
+      }),
+    ).toBe(false);
+  });
+
   it('launches opposite the drag and caps strength', () => {
     const game = createGame(14);
     const center = gorillaCenter(game.match.gorillas[game.match.activePlayer]);
@@ -116,6 +137,95 @@ describe('aiming and ballistics', () => {
     }
     expect(state.match.phase).toBe('aiming');
     expect(state.match.activePlayer).not.toBe(currentPlayer);
+  });
+
+  it('keeps simulating above the viewport so a high arc can re-enter', () => {
+    const game = createGame(23);
+    const state: GameState = {
+      ...game,
+      match: {
+        ...game.match,
+        phase: 'projectile-flight',
+        projectile: {
+          x: GAME_CONFIG.arenaWidth / 2,
+          y: GAME_CONFIG.arenaHeight - 0.05,
+          vx: 0,
+          vy: 20,
+          rotation: 0,
+        },
+      },
+    };
+    let advanced = stepGame(state, 0.05);
+    expect(advanced.match.phase).toBe('projectile-flight');
+    expect(advanced.match.projectile!.y).toBeGreaterThan(
+      GAME_CONFIG.arenaHeight,
+    );
+    for (let step = 0; step < 60; step += 1) {
+      advanced = stepGame(advanced, 0.05);
+      if (
+        advanced.match.projectile &&
+        advanced.match.projectile.y < GAME_CONFIG.arenaHeight &&
+        advanced.match.projectile.vy < 0
+      ) {
+        break;
+      }
+    }
+    expect(advanced.match.phase).toBe('projectile-flight');
+    expect(advanced.match.projectile!.y).toBeLessThan(
+      GAME_CONFIG.arenaHeight,
+    );
+  });
+
+  it('detects visible edge contact between a banana and a gorilla', () => {
+    const game = createGame(24);
+    const target = game.match.gorillas[1];
+    const center = gorillaCenter(target);
+    const state: GameState = {
+      ...game,
+      match: {
+        ...game.match,
+        phase: 'projectile-flight',
+        projectile: {
+          x: center.x - 5,
+          y: center.y + 3,
+          vx: 100,
+          vy: 0,
+          rotation: 0,
+        },
+      },
+    };
+    const hit = stepGame(state, 0.05);
+    expect(hit.match.phase).toBe('impact');
+    expect(hit.match.winner).toBe(0);
+    expect(hit.match.gorillas[1].alive).toBe(false);
+  });
+
+  it('explodes when the visible edge of a banana reaches a building', () => {
+    const game = createGame(25);
+    const occupied = new Set(
+      game.match.gorillas.map((gorilla) => gorilla.buildingId),
+    );
+    const building = game.match.buildings.find(
+      (candidate) => !occupied.has(candidate.id),
+    )!;
+    const state: GameState = {
+      ...game,
+      match: {
+        ...game.match,
+        phase: 'projectile-flight',
+        projectile: {
+          x: building.x + building.width / 2,
+          y: building.height + 1,
+          vx: 0,
+          vy: -10,
+          rotation: 0,
+        },
+      },
+    };
+    const hit = stepGame(state, 0.05);
+    expect(hit.match.phase).toBe('impact');
+    expect(hit.match.explosion?.kind).toBe('terrain');
+    expect(hit.match.craters).toHaveLength(1);
   });
 });
 

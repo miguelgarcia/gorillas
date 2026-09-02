@@ -1,4 +1,24 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { createGame, gorillaCenter } from '../../lib/game/core';
+
+const VIEW_WIDTH = 1600;
+const VIEW_HEIGHT = 900;
+const WORLD_SCALE = 13.5;
+const WORLD_LEFT = 125;
+const GROUND_Y = 820;
+
+async function worldToClient(page: Page, point: { x: number; y: number }) {
+  const bounds = await page.locator('.game-canvas').boundingBox();
+  if (!bounds) throw new Error('Game canvas is not visible');
+  return {
+    x:
+      bounds.x +
+      ((WORLD_LEFT + point.x * WORLD_SCALE) / VIEW_WIDTH) * bounds.width,
+    y:
+      bounds.y +
+      ((GROUND_Y - point.y * WORLD_SCALE) / VIEW_HEIGHT) * bounds.height,
+  };
+}
 
 test('loads a deterministic desktop arena and preserves it when reset is cancelled', async ({
   page,
@@ -97,4 +117,46 @@ test('registers WebMCP tools and rejects invalid throws without changing the mat
     'data-phase',
     'aiming',
   );
+});
+
+test('the second player can grab from the full visible inner aiming circle', async ({
+  page,
+}) => {
+  await page.goto('/?seed=4242');
+  const frame = page.locator('.game-frame');
+  await expect(page.getByText('BUILDING CITY')).toBeHidden();
+  const state = createGame(4242);
+  const firstCenter = gorillaCenter(state.match.gorillas[0]);
+  const firstStart = await worldToClient(page, firstCenter);
+  const firstRelease = await worldToClient(page, {
+    x: firstCenter.x + 10,
+    y: firstCenter.y,
+  });
+
+  await page.mouse.move(firstStart.x, firstStart.y);
+  await page.mouse.down();
+  await page.mouse.move(firstRelease.x, firstRelease.y, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(frame).toHaveAttribute('data-active-player', '2', {
+    timeout: 5000,
+  });
+  await expect(frame).toHaveAttribute('data-phase', 'aiming');
+
+  const secondCenter = gorillaCenter(state.match.gorillas[1]);
+  const secondStart = await worldToClient(page, {
+    x: secondCenter.x - 1.8,
+    y: secondCenter.y - 3.9,
+  });
+  const secondRelease = await worldToClient(page, {
+    x: secondCenter.x - 9.8,
+    y: secondCenter.y - 11.9,
+  });
+
+  await page.mouse.move(secondStart.x, secondStart.y);
+  await page.mouse.down();
+  await page.mouse.move(secondRelease.x, secondRelease.y, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(frame).toHaveAttribute('data-phase', 'projectile-flight');
 });

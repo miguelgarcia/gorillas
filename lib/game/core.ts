@@ -8,10 +8,12 @@ export const GAME_CONFIG = {
   buildingHeightMin: 12,
   buildingHeightMax: 36,
   floorHeight: 3,
-  gorillaRadius: 1.35,
+  gorillaRadius: 2.8,
+  gorillaFootprintRadius: 1.35,
+  aimStartRadius: 6.7,
   gorillaEdgeClearance: 1,
   gorillaMinSeparation: 40,
-  bananaRadius: 0.32,
+  bananaRadius: 0.75,
   maxDragDistance: 18,
   maxLaunchSpeed: 46,
   gravity: 18,
@@ -194,9 +196,9 @@ export function chooseGorillas(
       const firstX = firstBuilding.x + firstBuilding.width / 2;
       const secondX = secondBuilding.x + secondBuilding.width / 2;
       const firstClearance =
-        firstBuilding.width / 2 - GAME_CONFIG.gorillaRadius;
+        firstBuilding.width / 2 - GAME_CONFIG.gorillaFootprintRadius;
       const secondClearance =
-        secondBuilding.width / 2 - GAME_CONFIG.gorillaRadius;
+        secondBuilding.width / 2 - GAME_CONFIG.gorillaFootprintRadius;
 
       if (
         firstClearance >= GAME_CONFIG.gorillaEdgeClearance &&
@@ -384,7 +386,7 @@ export function canStartAim(game: GameState, point: Point) {
   const center = gorillaCenter(game.match.gorillas[game.match.activePlayer]);
   return (
     Math.hypot(point.x - center.x, point.y - center.y) <=
-    GAME_CONFIG.gorillaRadius + 2
+    GAME_CONFIG.aimStartRadius
   );
 }
 
@@ -450,7 +452,33 @@ function segmentCircleHit(
     : null;
 }
 
-function sweepTerrain(mask: TerrainMask, start: Point, end: Point) {
+function terrainCircleContact(
+  mask: TerrainMask,
+  center: Point,
+  radius: number,
+) {
+  if (isTerrainSolid(mask, center)) return center;
+  const samples = Math.max(
+    12,
+    Math.ceil((Math.PI * 2 * radius) / mask.cellSize),
+  );
+  for (let sample = 0; sample < samples; sample += 1) {
+    const angle = (sample / samples) * Math.PI * 2;
+    const point = {
+      x: center.x + Math.cos(angle) * radius,
+      y: center.y + Math.sin(angle) * radius,
+    };
+    if (isTerrainSolid(mask, point)) return point;
+  }
+  return null;
+}
+
+function sweepTerrain(
+  mask: TerrainMask,
+  start: Point,
+  end: Point,
+  radius: number,
+) {
   const distance = Math.hypot(end.x - start.x, end.y - start.y);
   const steps = Math.max(1, Math.ceil(distance / (mask.cellSize * 0.5)));
   for (let step = 0; step <= steps; step += 1) {
@@ -459,7 +487,8 @@ function sweepTerrain(mask: TerrainMask, start: Point, end: Point) {
       x: start.x + (end.x - start.x) * time,
       y: start.y + (end.y - start.y) * time,
     };
-    if (isTerrainSolid(mask, point)) return { time, point };
+    const contact = terrainCircleContact(mask, point, radius);
+    if (contact) return { time, point: contact };
   }
   return null;
 }
@@ -491,7 +520,12 @@ function updateProjectile(game: GameState, delta: number): GameState {
     }
   }
 
-  const terrainHit = sweepTerrain(match.terrain, start, nextPoint);
+  const terrainHit = sweepTerrain(
+    match.terrain,
+    start,
+    nextPoint,
+    GAME_CONFIG.bananaRadius,
+  );
   if (
     gorillaHit &&
     (!terrainHit || gorillaHit.time <= terrainHit.time + 0.0001)
@@ -538,8 +572,7 @@ function updateProjectile(game: GameState, delta: number): GameState {
   if (
     nextPoint.x < 0 ||
     nextPoint.x > GAME_CONFIG.arenaWidth ||
-    nextPoint.y < 0 ||
-    nextPoint.y > GAME_CONFIG.arenaHeight
+    nextPoint.y < 0
   ) {
     return {
       ...game,

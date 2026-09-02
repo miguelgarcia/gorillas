@@ -468,7 +468,7 @@ function drawAimingRing(
   const centerWorld = gorillaCenter(gorilla);
   const center = worldToScreen(centerWorld);
   const strength = pointer ? shotStrength(gorilla, pointer) : 0;
-  const innerRadius = 6.7 * WORLD_SCALE;
+  const innerRadius = GAME_CONFIG.aimStartRadius * WORLD_SCALE;
   const outerRadius = (10.8 + strength * 5.1) * WORLD_SCALE;
   const bandWidth = outerRadius - innerRadius;
 
