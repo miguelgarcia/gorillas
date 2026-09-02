@@ -95,6 +95,83 @@ function drawPixelSprite(
   context.restore();
 }
 
+type FlagMotion = {
+  stretch: number;
+  verticalScale: number;
+  amplitude: number;
+  speed: number;
+  droop: number;
+};
+
+export function getFlagMotion(wind: number): FlagMotion {
+  const strength = Math.min(1, Math.abs(wind) / GAME_CONFIG.windMax);
+  return {
+    stretch: 0.58 + strength * 0.54,
+    verticalScale: 1.08 - strength * 0.08,
+    amplitude: strength * (1.25 + strength * 4.75),
+    speed: 2.5 + strength * 8,
+    droop: 9 * (1 - strength) ** 1.5,
+  };
+}
+
+function flagWaveOffset(progress: number, elapsed: number, motion: FlagMotion) {
+  const attachmentFalloff = progress ** 1.25;
+  const primaryWave = Math.sin(
+    elapsed * motion.speed - progress * Math.PI * 2.4,
+  );
+  const trailingFlutter =
+    Math.sin(elapsed * motion.speed * 1.7 - progress * Math.PI * 4.2) *
+    progress *
+    0.22;
+  return Math.round(
+    motion.droop * progress ** 1.6 +
+      motion.amplitude * attachmentFalloff * (primaryWave + trailingFlutter),
+  );
+}
+
+function drawWavingFlagSprite(
+  context: CanvasRenderingContext2D,
+  sprite: PixelSprite,
+  position: Point,
+  pixelSize: number,
+  direction: 1 | -1,
+  elapsed: number,
+  motion: FlagMotion,
+) {
+  const width = Math.max(...sprite.rows.map((row) => row.length));
+
+  context.save();
+  context.translate(Math.round(position.x), Math.round(position.y));
+  context.scale(direction, 1);
+  context.imageSmoothingEnabled = false;
+
+  sprite.rows.forEach((row, rowIndex) => {
+    row.split('').forEach((spritePixel, columnIndex) => {
+      if (spritePixel === '.') return;
+      const progress = width <= 1 ? 0 : columnIndex / (width - 1);
+      const left = Math.round(columnIndex * pixelSize * motion.stretch);
+      const right = Math.round((columnIndex + 1) * pixelSize * motion.stretch);
+      const top = Math.round(
+        rowIndex * pixelSize * motion.verticalScale +
+          flagWaveOffset(progress, elapsed, motion),
+      );
+      const bottom = Math.round(
+        (rowIndex + 1) * pixelSize * motion.verticalScale +
+          flagWaveOffset(progress, elapsed, motion),
+      );
+
+      context.fillStyle = sprite.colors[spritePixel] ?? '#ffffff';
+      context.fillRect(
+        left,
+        top,
+        Math.max(1, right - left),
+        Math.max(1, bottom - top),
+      );
+    });
+  });
+  context.restore();
+}
+
 const CLOUD_MASSES = [
   [0, 36, 58, 18],
   [28, 22, 62, 31],
@@ -324,7 +401,7 @@ function drawFlag(
     y: building.height,
   });
   const direction: 1 | -1 = game.match.wind < 0 ? -1 : 1;
-  const strength = Math.abs(game.match.wind) / GAME_CONFIG.windMax;
+  const motion = getFlagMotion(game.match.wind);
   const height = 76;
   const poleX = pixel(anchor.x, 2);
   const poleTop = pixel(anchor.y - height, 2);
@@ -339,12 +416,15 @@ function drawFlag(
   context.fillStyle = theme.palette.windowLit;
   context.fillRect(poleX - 2, poleTop - 5, 4, 4);
 
-  const stretch = 0.78 + strength * 0.32;
-  context.save();
-  context.translate(poleX + direction * (23 * stretch), poleTop + 31);
-  context.scale(stretch, 0.92 + strength * 0.08);
-  drawPixelSprite(context, theme.sprites.flag, { x: 0, y: 0 }, 3, direction);
-  context.restore();
+  drawWavingFlagSprite(
+    context,
+    theme.sprites.flag,
+    { x: poleX, y: poleTop + 7 },
+    3,
+    direction,
+    game.match.elapsed,
+    motion,
+  );
 }
 
 function drawGorilla(
