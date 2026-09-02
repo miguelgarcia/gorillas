@@ -262,7 +262,8 @@ function drawCityLayer(
       minimumHeight + random() * (maximumHeight - minimumHeight),
     );
     const roof = GROUND_Y - height;
-    const body = random() > 0.52 ? baseColor : mixColor(baseColor, skyColor, 0.18);
+    const body =
+      random() > 0.52 ? baseColor : mixColor(baseColor, skyColor, 0.18);
 
     context.fillStyle = body;
     context.fillRect(x, roof, width, height);
@@ -302,7 +303,10 @@ function drawSky(
 ) {
   const gradient = context.createLinearGradient(0, 0, 0, GROUND_Y);
   gradient.addColorStop(0, theme.palette.skyTop);
-  gradient.addColorStop(0.58, mixColor(theme.palette.skyTop, theme.palette.skyBottom, 0.7));
+  gradient.addColorStop(
+    0.58,
+    mixColor(theme.palette.skyTop, theme.palette.skyBottom, 0.7),
+  );
   gradient.addColorStop(1, theme.palette.skyBottom);
   context.fillStyle = gradient;
   context.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
@@ -443,8 +447,7 @@ function drawGorilla(
     x: gorilla.x + (isWinner ? dance * 0.16 : 0),
     y: gorilla.roofY + (isWinner ? Math.abs(dance) * 0.28 : 0),
   });
-  const teamColor =
-    gorilla.player === 0 ? theme.palette.p1 : theme.palette.p2;
+  const teamColor = gorilla.player === 0 ? theme.palette.p1 : theme.palette.p2;
   const bodyColor = gorilla.player === 0 ? '#563528' : '#29333a';
   const shadowColor = gorilla.player === 0 ? '#35231f' : '#182128';
 
@@ -508,10 +511,10 @@ function drawExplosion(
     1,
     explosion.elapsed / GAME_CONFIG.explosionDuration,
   );
-  const radius =
+  const maximumRadius =
     (explosion.kind === 'terrain' ? GAME_CONFIG.craterRadius : 3.8) *
-    WORLD_SCALE *
-    Math.sin(progress * Math.PI);
+    WORLD_SCALE;
+  const radius = maximumRadius * Math.sin(progress * Math.PI);
   const size = Math.max(5, radius);
   context.save();
   context.globalAlpha = 0.94 - progress * 0.42;
@@ -523,17 +526,66 @@ function drawExplosion(
   context.fillRect(-size * 0.4, -size * 0.4, size * 0.8, size * 0.8);
   context.restore();
 
-  context.fillStyle = theme.palette.explosionCore;
-  for (let index = 0; index < 8; index += 1) {
-    const angle = (index / 8) * Math.PI * 2 + game.match.seed * 0.01;
-    const distance = size * (0.65 + progress * 0.9);
-    const particleSize = Math.max(3, 8 * (1 - progress));
+  context.save();
+  for (let index = 0; index < 16; index += 1) {
+    const angle = (index / 16) * Math.PI * 2 + game.match.seed * 0.01;
+    const distance = maximumRadius * progress * (0.45 + (index % 4) * 0.16);
+    const particleSize = Math.max(3, 10 * (1 - progress));
+    context.globalAlpha = Math.max(0, 1 - progress) * 0.9;
+    context.fillStyle =
+      index % 4 === 0
+        ? theme.palette.craterRim
+        : index % 2 === 0
+          ? theme.palette.explosionCore
+          : theme.palette.explosionEdge;
     context.fillRect(
       pixel(center.x + Math.cos(angle) * distance, 2),
       pixel(center.y + Math.sin(angle) * distance, 2),
       particleSize,
       particleSize,
     );
+  }
+  context.restore();
+}
+
+function cutCraterDamage(
+  context: CanvasRenderingContext2D,
+  game: GameState,
+  theme: GameTheme,
+) {
+  for (const [index, crater] of game.match.craters.entries()) {
+    const center = worldToScreen(crater);
+    const radius = crater.radius * WORLD_SCALE;
+    const random = createRandom(
+      game.match.seed ^ Math.imul(index + 1, 0x9e3779b9),
+    );
+
+    context.save();
+    context.globalCompositeOperation = 'source-atop';
+    context.strokeStyle = theme.palette.craterRim;
+    context.lineWidth = 16;
+    context.beginPath();
+    context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    context.stroke();
+
+    context.fillStyle = theme.palette.craterRim;
+    for (let chip = 0; chip < 14; chip += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = radius + 5 + random() * 13;
+      const size = 3 + Math.round(random() * 6);
+      context.fillRect(
+        pixel(center.x + Math.cos(angle) * distance - size / 2, 2),
+        pixel(center.y + Math.sin(angle) * distance - size / 2, 2),
+        size,
+        size,
+      );
+    }
+
+    context.globalCompositeOperation = 'destination-out';
+    context.beginPath();
+    context.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
   }
 }
 
@@ -569,13 +621,7 @@ function drawAimingRing(
   context.strokeStyle = theme.palette.ringFill;
   context.lineWidth = Math.max(1, bandWidth - 5);
   context.beginPath();
-  context.arc(
-    center.x,
-    center.y,
-    innerRadius + bandWidth / 2,
-    0,
-    Math.PI * 2,
-  );
+  context.arc(center.x, center.y, innerRadius + bandWidth / 2, 0, Math.PI * 2);
   context.stroke();
   context.globalAlpha = 1;
 
@@ -691,7 +737,11 @@ function drawRoofDetails(
 ) {
   const random = createRandom(building.windowSeed ^ 0x72a9);
   const outline = theme.palette.buildingOutline;
-  const metal = mixColor(theme.palette.distantCity, theme.palette.cloudNear, 0.28);
+  const metal = mixColor(
+    theme.palette.distantCity,
+    theme.palette.cloudNear,
+    0.28,
+  );
   const kind = Math.floor(random() * 4);
   const center = pixel(left + width * (0.34 + random() * 0.32), 2);
 
@@ -843,20 +893,7 @@ export class GameRenderer {
       drawBuilding(context, game, building, theme),
     );
 
-    context.globalCompositeOperation = 'destination-out';
-    for (const crater of game.match.craters) {
-      const center = worldToScreen(crater);
-      context.beginPath();
-      context.arc(
-        center.x,
-        center.y,
-        crater.radius * WORLD_SCALE,
-        0,
-        Math.PI * 2,
-      );
-      context.fill();
-    }
-    context.globalCompositeOperation = 'source-over';
+    cutCraterDamage(context, game, theme);
 
     this.terrainLayer = layer;
     this.terrainKey = key;

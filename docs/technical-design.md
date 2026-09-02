@@ -51,6 +51,7 @@ This separation keeps gameplay testable and makes future remote multiplayer poss
 - A crater clears every occupied mask cell inside its circle.
 - Collision queries read the mask, so later projectiles pass through holes.
 - Rendering clips themed building artwork through the same destruction mask, revealing the already-rendered background.
+- A terrain-clipped dark rim and deterministic debris marks remain around each cutout so sky-visible holes read as destroyed structure rather than colored overlays.
 - Gorillas remain anchored to their initial rooftop positions; terrain destruction does not create structural physics.
 
 ## Generation

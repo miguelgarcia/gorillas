@@ -18,6 +18,7 @@
     "ring": "#f7fbfb",
     "ringFill": "#d4eff3",
     "banana": "#f6ca3c",
+    "craterRim": "#121d23",
     "explosionCore": "#ffe896",
     "explosionEdge": "#ef6e3c",
     "text": "#eff8f8",
@@ -59,10 +60,22 @@
     },
     "banana": {
       "colors": { "Y": "#f6ca3c", "S": "#fff3a6", "O": "#5f4619" },
-      "rows": ["........OO", "......YYYY", "...YYYYYYS", ".YYYYYYS..", "YYYY......", ".OO......."]
+      "rows": [
+        "........OO",
+        "......YYYY",
+        "...YYYYYYS",
+        ".YYYYYYS..",
+        "YYYY......",
+        ".OO......."
+      ]
     },
     "flag": {
-      "colors": { "F": "#ce452e", "L": "#f06a3d", "Y": "#f6ca3c", "D": "#7e2d24" },
+      "colors": {
+        "F": "#ce452e",
+        "L": "#f06a3d",
+        "Y": "#f6ca3c",
+        "D": "#7e2d24"
+      },
       "rows": [
         "DDDDDDDDDDDDDDDD",
         "FLLLLLLLLLLLLLFD",

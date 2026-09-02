@@ -23,6 +23,7 @@ export type GameTheme = {
     ring: string;
     ringFill: string;
     banana: string;
+    craterRim: string;
     explosionCore: string;
     explosionEdge: string;
     text: string;
