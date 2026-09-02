@@ -1,0 +1,71 @@
+{
+  "id": "storm",
+  "name": "Windy Overcast",
+  "palette": {
+    "skyTop": "#30495d",
+    "skyBottom": "#71899a",
+    "cloudFar": "#7f98a8",
+    "cloudNear": "#afc1ca",
+    "distantCity": "#344b58",
+    "buildingOutline": "#1c2930",
+    "facades": ["#70473e", "#3f6470", "#88703f", "#4b5d68", "#526548"],
+    "windowDark": "#263b47",
+    "windowLit": "#e0bb57",
+    "ground": "#17242c",
+    "groundEdge": "#2e424d",
+    "p1": "#dd6c4d",
+    "p2": "#61a9bd",
+    "ring": "#eef9fa",
+    "ringFill": "#75d5df",
+    "banana": "#f4c945",
+    "explosionCore": "#ffe28a",
+    "explosionEdge": "#e36d43",
+    "text": "#eff8f8",
+    "panel": "rgba(18, 29, 36, 0.84)",
+    "panelBorder": "rgba(220, 238, 239, 0.28)"
+  },
+  "sprites": {
+    "gorilla": {
+      "colors": {
+        "D": "#17191e",
+        "M": "#30343c",
+        "F": "#a06e4a",
+        "E": "#f4e6cf",
+        "A": "#ffffff"
+      },
+      "rows": [
+        ".....DDDDD.....",
+        "...DDDDDDDDD...",
+        "..DDDMMMMDDDD..",
+        "..DDMFEFMDDDD..",
+        "..DDMFFFFMDDD..",
+        "...DDMFFMDDD...",
+        ".DDDDDDDDDDDDD.",
+        "DDDDDDDDDDDDDDD",
+        "DDD.DDDDDDD.DDD",
+        "DD..DDDDDDD..DD",
+        "....DDDDDDD....",
+        "...DDDDDDDDD...",
+        "...DDD...DDD...",
+        "...DDD...DDD...",
+        "..DDD.....DDD..",
+        "..AAA.....AAA.."
+      ]
+    },
+    "banana": {
+      "colors": { "Y": "#f4c945", "S": "#fff0a1", "O": "#765620" },
+      "rows": [".......OO", ".....YYYY", "..YYYYYS.", "YYYYY....", ".OO......"]
+    },
+    "flag": {
+      "colors": { "F": "#dd6c4d", "H": "#f1a76d" },
+      "rows": [
+        "FFFFFFFFFFFFFF",
+        "FFFFFFFFFFFF..",
+        "FFFFHHFFFFFF..",
+        "FFFFFFFFFF....",
+        "FFFFFFFF......",
+        "FFFFF........."
+      ]
+    }
+  }
+}
