@@ -14,7 +14,7 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (isGitHubPagesBuild && githubOwner
     ? `https://${githubOwner}.github.io${basePath}`
-    : 'https://gorillas-rooftop-artillery.miguel-garcia744864.chatgpt.site');
+    : 'https://miguelgarcia.github.io/gorillas');
 
 const nextConfig: NextConfig = {
   output: 'export',

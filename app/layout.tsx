@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  'https://gorillas-rooftop-artillery.miguel-garcia744864.chatgpt.site';
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://miguelgarcia.github.io/gorillas';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
