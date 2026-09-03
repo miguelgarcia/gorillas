@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  'https://gorillas-rooftop-artillery.miguel-garcia744864.chatgpt.site';
+
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    'https://gorillas-rooftop-artillery.miguel-garcia744864.chatgpt.site',
-  ),
+  metadataBase: new URL(siteUrl),
+  alternates: { canonical: siteUrl },
   title: 'Gorillas — Rooftop Artillery',
   description:
     'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
@@ -13,9 +16,10 @@ export const metadata: Metadata = {
     description:
       'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
     type: 'website',
+    url: siteUrl,
     images: [
       {
-        url: '/og.png',
+        url: `${siteUrl}/og.png`,
         width: 1672,
         height: 941,
         alt: 'Two gorillas face off across a windy pixel-art skyline.',
@@ -27,7 +31,7 @@ export const metadata: Metadata = {
     title: 'Gorillas — Rooftop Artillery',
     description:
       'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
-    images: ['/og.png'],
+    images: [`${siteUrl}/og.png`],
   },
 };
 

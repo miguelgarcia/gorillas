@@ -1,5 +1,7 @@
 import { GorillasGame } from './gorillas-game';
 
+export const dynamic = 'force-static';
+
 export default function Home() {
   return (
     <main className="game-shell">

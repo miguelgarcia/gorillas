@@ -105,11 +105,13 @@ export async function loadTheme(url: string): Promise<GameTheme> {
   if (!isTheme(value)) throw new Error('Theme manifest is incomplete');
   const { gorillaSheet, ...theme } = value;
   if (!gorillaSheet) return theme;
+  const imageUrl = new URL(gorillaSheet.src, response.url).href;
   return {
     ...theme,
     gorillaSheet: {
       ...gorillaSheet,
-      image: await loadImage(gorillaSheet.src),
+      src: imageUrl,
+      image: await loadImage(imageUrl),
     },
   };
 }

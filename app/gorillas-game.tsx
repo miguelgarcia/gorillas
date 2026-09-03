@@ -33,6 +33,7 @@ import { loadTheme, type GameTheme } from '@/lib/game/theme';
 
 const FIXED_TIMESTEP = 1 / 120;
 const INITIAL_GAME = createGame(0x67a11a);
+const PUBLIC_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 type WebMcpTool = {
   name: string;
@@ -129,7 +130,7 @@ export function GorillasGame() {
   useEffect(() => {
     gameRef.current = createGame(initialSeed());
     syncUi();
-    loadTheme('/themes/storm/theme.json')
+    loadTheme(`${PUBLIC_BASE_PATH}/themes/storm/theme.json`)
       .then(setTheme)
       .catch(() => setLoadError(true));
   }, [syncUi]);

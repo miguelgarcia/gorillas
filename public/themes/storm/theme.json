@@ -89,7 +89,7 @@
     }
   },
   "gorillaSheet": {
-    "src": "/themes/storm/gorillas.png",
+    "src": "gorillas.png",
     "columns": 5,
     "rows": 2,
     "frames": {
