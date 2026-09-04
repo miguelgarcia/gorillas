@@ -49,7 +49,7 @@ The following are deferred beyond version 1:
 - There is no pre-match configuration.
 - Players are identified as Player 1 and Player 2.
 - Players do not enter names or choose characters, loadouts, rules, or other settings before play.
-- Launching the game leads directly into the local two-player session.
+- Launching the page opens a loading/presentation screen; activating `Start` enters the local two-player session without a configuration step.
 - A cumulative scoreboard tracks match wins for P1 and P2 across rematches in the current session.
 - The scoreboard is centered along the top edge and uses the compact format `P1  0 — 0  P2`.
 - The winning player's score increases once when the victory state begins.
@@ -57,6 +57,27 @@ The following are deferred beyond version 1:
 - Pressing Escape opens a score-reset confirmation overlay.
 - While that overlay is open, Enter resets both scores to zero and Escape cancels without changes.
 - Resetting scores does not regenerate the skyline, change the active player, or otherwise alter the current match state.
+
+## Opening presentation
+
+- Show a centered banner superimposed over the windy city arena, keeping the skyline visible once its assets are ready.
+- The banner's first line is exactly `Gorillas by Miguel Garcia`.
+- The second line is a `Visit repo` link to [the GitHub repository](https://github.com/miguelgarcia/gorillas), opened in a new tab without replacing the game page.
+- Place a clearly visible `Start` button below the link.
+- Show genuine loading feedback while the city assets load, and keep Start disabled until the arena is ready. Do not add an artificial loading delay or automatically dismiss the presentation.
+- If loading fails, keep the title and repository link available, show an error with refresh guidance, and do not allow an unready match to start.
+- The city is a non-playable backdrop until Start is activated. Hide the aiming ring, scoreboard, and gameplay instructions; aiming, throwing, rematches, and score reset are unavailable.
+- Starting reveals the prepared first match with P1 active and both scores at zero. The starting click or key must not also aim or throw.
+- Show the presentation once per page load. Rematches and score resets stay in the game; reloading the page shows the presentation again.
+- The title, link, loading feedback, Start button, and sound control remain readable within the existing fixed-arena desktop layout. Link and buttons support keyboard focus and activation.
+
+### Presentation music
+
+- Reuse the game's existing looping music for the presentation and continue it into gameplay without restarting or layering a second loop. A separate intro composition is not part of this change.
+- Respect the saved sound preference on entry, including remaining silent when the player previously muted audio.
+- Start music as soon as browser policy permits. Audible autoplay is not guaranteed: when interaction is required, provide an explicit way to enable music without leaving the presentation.
+- Keep the sound control available before and after Start. Distinguish audio waiting for permission from audio actually playing; enabling music alone must not start the match.
+- Start also requests audio playback when sound is enabled, but audio permission or availability must never block entry to the game.
 
 ## Victory presentation
 

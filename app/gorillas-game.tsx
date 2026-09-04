@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +29,13 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from '@/lib/game/render';
-import { GameAudio } from '@/lib/game/audio';
+import { GameAudio, type AudioPlaybackState } from '@/lib/game/audio';
 import { loadTheme, type GameTheme } from '@/lib/game/theme';
 
 const FIXED_TIMESTEP = 1 / 120;
 const INITIAL_GAME = createGame(0x67a11a);
 const PUBLIC_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+type PageState = 'loading' | 'presentation' | 'playing' | 'load-error';
 
 type WebMcpTool = {
   name: string;
@@ -107,10 +109,12 @@ export function GorillasGame() {
   const resetOpenRef = useRef(false);
   const snapshotKeyRef = useRef('');
   const audioRef = useRef<GameAudio | null>(null);
+  const screenRef = useRef<PageState>('loading');
+  const accumulatorRef = useRef(0);
+  const [screen, setScreen] = useState<PageState>('loading');
   const [theme, setTheme] = useState<GameTheme | null>(null);
-  const [loadError, setLoadError] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [audioState, setAudioState] = useState<AudioPlaybackState>('waiting');
   const [ui, setUi] = useState<UiSnapshot>(() => snapshot(INITIAL_GAME));
 
   const getAudio = useCallback(() => {
@@ -127,13 +131,26 @@ export function GorillasGame() {
     }
   }, []);
 
+  const changeScreen = useCallback((next: PageState) => {
+    screenRef.current = next;
+    setScreen(next);
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
     gameRef.current = createGame(initialSeed());
     syncUi();
     loadTheme(`${PUBLIC_BASE_PATH}/themes/storm/theme.json`)
-      .then(setTheme)
-      .catch(() => setLoadError(true));
-  }, [syncUi]);
+      .then((loadedTheme) => {
+        if (!cancelled) setTheme(loadedTheme);
+      })
+      .catch(() => {
+        if (!cancelled) changeScreen('load-error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [changeScreen, syncUi]);
 
   useEffect(() => {
     resetOpenRef.current = resetOpen;
@@ -141,19 +158,35 @@ export function GorillasGame() {
 
   useEffect(() => {
     const audio = getAudio();
-    const enabled = window.localStorage.getItem('gorillas:sound') !== 'off';
+    let enabled = true;
+    try {
+      enabled = window.localStorage.getItem('gorillas:sound') !== 'off';
+    } catch {
+      /* Audio still works when browser storage is unavailable. */
+    }
     audio.setEnabled(enabled);
-    const preferenceFrame = window.requestAnimationFrame(() =>
-      setSoundEnabled(enabled),
-    );
+    const unsubscribe = audio.subscribe(setAudioState);
+    const preferenceFrame = window.requestAnimationFrame(() => {
+      setAudioState(audio.playbackState);
+      void audio.unlock();
+    });
 
-    const unlockAudio = () => void audio.unlock();
+    const unlockAudio = (event: Event) => {
+      // The sound button handles its own gesture; do not enable and then mute it.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('.sound-toggle')
+      )
+        return;
+      void audio.unlock();
+    };
     window.addEventListener('pointerdown', unlockAudio);
     window.addEventListener('keydown', unlockAudio);
     return () => {
       window.cancelAnimationFrame(preferenceFrame);
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
+      unsubscribe();
       audio.destroy();
       if (audioRef.current === audio) audioRef.current = null;
     };
@@ -167,14 +200,13 @@ export function GorillasGame() {
 
     let animationFrame = 0;
     let previousTime = performance.now();
-    let accumulator = 0;
 
     const render = (time: number) => {
       const frameDelta = Math.min((time - previousTime) / 1000, 0.05);
       previousTime = time;
-      if (!resetOpenRef.current) {
-        accumulator += frameDelta;
-        while (accumulator >= FIXED_TIMESTEP) {
+      if (screenRef.current === 'playing' && !resetOpenRef.current) {
+        accumulatorRef.current += frameDelta;
+        while (accumulatorRef.current >= FIXED_TIMESTEP) {
           const previous = gameRef.current;
           const next = stepGame(previous, FIXED_TIMESTEP);
           gameRef.current = next;
@@ -188,8 +220,10 @@ export function GorillasGame() {
               getAudio().playVictory(next.match.winner);
             }
           }
-          accumulator -= FIXED_TIMESTEP;
+          accumulatorRef.current -= FIXED_TIMESTEP;
         }
+      } else {
+        accumulatorRef.current = 0;
       }
       syncUi();
       rendererRef.current.draw(
@@ -197,15 +231,28 @@ export function GorillasGame() {
         gameRef.current,
         theme,
         aimingRef.current ? pointerRef.current : null,
+        screenRef.current !== 'playing',
       );
+      if (screenRef.current === 'loading') changeScreen('presentation');
       animationFrame = requestAnimationFrame(render);
     };
 
     animationFrame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrame);
-  }, [getAudio, syncUi, theme]);
+  }, [changeScreen, getAudio, syncUi, theme]);
+
+  const beginGame = useCallback(() => {
+    if (screenRef.current !== 'presentation') return;
+    aimingRef.current = false;
+    pointerRef.current = null;
+    accumulatorRef.current = 0;
+    changeScreen('playing');
+    void getAudio().unlock();
+    canvasRef.current?.focus();
+  }, [changeScreen, getAudio]);
 
   const beginRematch = useCallback(() => {
+    if (screenRef.current !== 'playing' || resetOpenRef.current) return;
     gameRef.current = startRematch(gameRef.current);
     aimingRef.current = false;
     pointerRef.current = null;
@@ -213,6 +260,7 @@ export function GorillasGame() {
   }, [syncUi]);
 
   const confirmReset = useCallback(() => {
+    if (screenRef.current !== 'playing') return;
     gameRef.current = resetScores(gameRef.current);
     setResetOpen(false);
     syncUi();
@@ -250,6 +298,7 @@ export function GorillasGame() {
       execute() {
         const game = gameRef.current;
         return {
+          screen: screenRef.current,
           activePlayer: game.match.activePlayer + 1,
           phase: game.match.phase,
           scores: { p1: game.scores[0], p2: game.scores[1] },
@@ -297,6 +346,11 @@ export function GorillasGame() {
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       async execute(input) {
+        if (screenRef.current !== 'playing' || resetOpenRef.current) {
+          throw new Error(
+            'Start the game and close any dialog before throwing.',
+          );
+        }
         if (!input || typeof input !== 'object') {
           throw new TypeError('Expected dragEndX and dragEndY.');
         }
@@ -342,6 +396,7 @@ export function GorillasGame() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (screenRef.current !== 'playing') return;
       if (resetOpenRef.current) {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -383,15 +438,6 @@ export function GorillasGame() {
       } as React.CSSProperties)
     : undefined;
 
-  if (loadError) {
-    return (
-      <section className="load-state" role="alert">
-        <strong>THE CITY COULD NOT LOAD</strong>
-        <span>Refresh the page to try again.</span>
-      </section>
-    );
-  }
-
   return (
     <section
       className="game-frame"
@@ -399,37 +445,88 @@ export function GorillasGame() {
       data-active-player={ui.activePlayer + 1}
       data-match-number={ui.matchNumber}
       data-phase={ui.phase}
+      data-screen={screen}
       style={themeStyle}
     >
-      <div className="scoreboard" aria-live="polite" aria-atomic="true">
-        <span className="player-one">P1</span>
-        <strong>{ui.scores[0]}</strong>
-        <span aria-hidden="true">—</span>
-        <strong>{ui.scores[1]}</strong>
-        <span className="player-two">P2</span>
-      </div>
+      {screen === 'playing' ? (
+        <div className="scoreboard" aria-live="polite" aria-atomic="true">
+          <span className="player-one">P1</span>
+          <strong>{ui.scores[0]}</strong>
+          <span aria-hidden="true">—</span>
+          <strong>{ui.scores[1]}</strong>
+          <span className="player-two">P2</span>
+        </div>
+      ) : null}
 
       <button
         type="button"
         className="sound-toggle"
-        aria-label={soundEnabled ? 'Mute game audio' : 'Turn on game audio'}
-        aria-pressed={soundEnabled}
+        aria-label={
+          audioState === 'playing'
+            ? 'Mute game audio'
+            : audioState === 'unavailable'
+              ? 'Game audio unavailable'
+              : 'Turn on game audio'
+        }
+        aria-pressed={audioState === 'playing'}
+        disabled={audioState === 'unavailable'}
+        data-audio-state={audioState}
         onClick={() => {
           const audio = getAudio();
-          const next = !audio.isEnabled;
+          const next = audio.playbackState !== 'playing';
           audio.setEnabled(next);
-          setSoundEnabled(next);
-          window.localStorage.setItem('gorillas:sound', next ? 'on' : 'off');
+          try {
+            window.localStorage.setItem('gorillas:sound', next ? 'on' : 'off');
+          } catch {
+            /* Persistence is optional; the control still works. */
+          }
           if (next) void audio.unlock();
         }}
       >
-        <span aria-hidden="true">{soundEnabled ? '♪' : '×'}</span>
-        {soundEnabled ? 'SOUND ON' : 'SOUND OFF'}
+        <span aria-hidden="true">
+          {audioState === 'playing' || audioState === 'waiting' ? '♪' : '×'}
+        </span>
+        {audioState === 'playing'
+          ? 'SOUND ON'
+          : audioState === 'waiting'
+            ? 'ENABLE MUSIC'
+            : audioState === 'muted'
+              ? 'SOUND OFF'
+              : 'AUDIO UNAVAILABLE'}
       </button>
 
-      {!theme ? (
-        <div className="load-state" aria-live="polite">
-          <strong>BUILDING CITY</strong>
+      {screen !== 'playing' ? (
+        <div className="presentation-overlay">
+          <div className="presentation-banner">
+            <h1>Gorillas by Miguel Garcia</h1>
+            <a
+              className="repo-link"
+              href="https://github.com/miguelgarcia/gorillas"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Visit repo<span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            <Button
+              className="start-button"
+              disabled={screen !== 'presentation'}
+              onClick={beginGame}
+            >
+              Start
+            </Button>
+            {screen === 'load-error' ? (
+              <div className="presentation-status" role="alert">
+                <strong>THE CITY COULD NOT LOAD</strong>
+                <span>Refresh the page to try again.</span>
+              </div>
+            ) : (
+              <output className="presentation-status">
+                {screen === 'loading'
+                  ? 'BUILDING CITY'
+                  : 'Two players. One skyline. One banana.'}
+              </output>
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -438,9 +535,15 @@ export function GorillasGame() {
         className="game-canvas"
         width={VIEW_WIDTH}
         height={VIEW_HEIGHT}
-        tabIndex={0}
-        aria-label={`Windy city arena. P${ui.activePlayer + 1} is active. Drag from the highlighted gorilla to aim.`}
+        tabIndex={screen === 'playing' ? 0 : -1}
+        aria-hidden={screen !== 'playing'}
+        aria-label={
+          screen === 'playing'
+            ? `Windy city arena. P${ui.activePlayer + 1} is active. Drag from the highlighted gorilla to aim.`
+            : 'Windy city preview'
+        }
         onPointerDown={(event) => {
+          if (screenRef.current !== 'playing' || resetOpenRef.current) return;
           event.currentTarget.focus();
           if (gameRef.current.match.phase === 'victory') {
             beginRematch();
@@ -454,9 +557,11 @@ export function GorillasGame() {
           }
         }}
         onPointerMove={(event) => {
+          if (screenRef.current !== 'playing' || resetOpenRef.current) return;
           if (aimingRef.current) pointerRef.current = toWorld(event);
         }}
         onPointerUp={(event) => {
+          if (screenRef.current !== 'playing' || resetOpenRef.current) return;
           if (!aimingRef.current) return;
           const point = toWorld(event);
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -476,7 +581,7 @@ export function GorillasGame() {
         }}
       />
 
-      {ui.phase === 'victory' && ui.winner !== null ? (
+      {screen === 'playing' && ui.phase === 'victory' && ui.winner !== null ? (
         <button
           type="button"
           className="victory-overlay"
@@ -488,9 +593,11 @@ export function GorillasGame() {
         </button>
       ) : null}
 
-      <p className="control-hint">
-        Drag from the ring · release to throw · Esc resets score
-      </p>
+      {screen === 'playing' ? (
+        <p className="control-hint">
+          Drag from the ring · release to throw · Esc resets score
+        </p>
+      ) : null}
 
       <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
         <AlertDialogContent className="reset-dialog" size="sm">

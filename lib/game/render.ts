@@ -470,6 +470,7 @@ function drawGorilla(
   game: GameState,
   theme: GameTheme,
   gorilla: Gorilla,
+  presentation = false,
 ) {
   const isHit =
     !gorilla.alive &&
@@ -488,7 +489,7 @@ function drawGorilla(
   const teamColor = gorilla.player === 0 ? theme.palette.p1 : theme.palette.p2;
   const bodyColor = gorilla.player === 0 ? '#563528' : '#29333a';
   const shadowColor = gorilla.player === 0 ? '#35231f' : '#182128';
-  const pose = getGorillaPose(game, gorilla);
+  const pose = getGorillaPose(game, gorilla, presentation);
 
   context.save();
   context.shadowColor = 'rgb(9 15 18 / 0.55)';
@@ -527,7 +528,12 @@ function drawGorilla(
   }
 }
 
-export function getGorillaPose(game: GameState, gorilla: Gorilla): GorillaPose {
+export function getGorillaPose(
+  game: GameState,
+  gorilla: Gorilla,
+  presentation = false,
+): GorillaPose {
+  if (presentation) return 'idle';
   if (!gorilla.alive) return 'hit';
   if (game.match.phase === 'victory' && game.match.winner === gorilla.player) {
     return 'victory';
@@ -965,6 +971,7 @@ export class GameRenderer {
     game: GameState,
     theme: GameTheme,
     pointer: Point | null,
+    presentation = false,
   ) {
     context.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
     context.imageSmoothingEnabled = false;
@@ -973,10 +980,10 @@ export class GameRenderer {
     drawGround(context, theme);
     drawFlag(context, game, theme);
     game.match.gorillas.forEach((gorilla) =>
-      drawGorilla(context, game, theme, gorilla),
+      drawGorilla(context, game, theme, gorilla, presentation),
     );
     drawProjectile(context, game, theme);
     drawExplosion(context, game, theme);
-    drawAimingRing(context, game, theme, pointer);
+    if (!presentation) drawAimingRing(context, game, theme, pointer);
   }
 }

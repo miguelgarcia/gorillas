@@ -20,10 +20,41 @@ async function worldToClient(page: Page, point: { x: number; y: number }) {
   };
 }
 
+test('victory, rematches, and score reset do not return to the presentation', async ({
+  page,
+}) => {
+  await page.goto('/?seed=4242');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  const frame = page.locator('.game-frame');
+  const center = gorillaCenter(createGame(4242).match.gorillas[0]);
+  const grab = await worldToClient(page, center);
+  const release = await worldToClient(page, { x: center.x, y: center.y - 1 });
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  await page.mouse.move(release.x, release.y, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.getByText('P2 WINS', { exact: true })).toBeVisible();
+  await expect(page.locator('.scoreboard strong')).toHaveText(['0', '1']);
+  await expect(frame).toHaveAttribute('data-screen', 'playing');
+  await page.keyboard.press('Enter');
+  await expect(frame).toHaveAttribute('data-match-number', '2');
+  await expect(frame).toHaveAttribute('data-active-player', '2');
+  await expect(frame).toHaveAttribute('data-phase', 'aiming');
+  await expect(page.locator('.scoreboard strong')).toHaveText(['0', '1']);
+  await expect(page.locator('.presentation-overlay')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('RESET SCORES?')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.scoreboard strong')).toHaveText(['0', '0']);
+  await expect(frame).toHaveAttribute('data-match-number', '2');
+  await expect(frame).toHaveAttribute('data-screen', 'playing');
+});
+
 test('loads a deterministic desktop arena and preserves it when reset is cancelled', async ({
   page,
 }) => {
   await page.goto('/?seed=4242');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
   const game = page.getByRole('region', {
     name: 'Gorillas local hot-seat game',
   });
@@ -45,6 +76,8 @@ test('mutes game audio and preserves the preference across reloads', async ({
   page,
 }) => {
   await page.goto('/?seed=4242');
+  // Browsers may allow autoplay or require a gesture on the presentation.
+  await page.locator('.presentation-banner h1').click();
   const mute = page.getByRole('button', { name: 'Mute game audio' });
   await expect(mute).toHaveAttribute('aria-pressed', 'true');
 
@@ -59,6 +92,19 @@ test('mutes game audio and preserves the preference across reloads', async ({
   await expect(
     page.getByRole('button', { name: 'Turn on game audio' }),
   ).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.sound-toggle')).toHaveAttribute(
+    'data-audio-state',
+    'muted',
+  );
+  await expect(page.locator('.game-frame')).toHaveAttribute(
+    'data-screen',
+    'presentation',
+  );
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.locator('.sound-toggle')).toHaveAttribute(
+    'data-audio-state',
+    'muted',
+  );
 });
 
 test('registers WebMCP tools and rejects invalid throws without changing the match', async ({
@@ -93,6 +139,36 @@ test('registers WebMCP tools and rejects invalid throws without changing the mat
     ).modelContext;
     return context?.tools?.size === 2;
   });
+  await expect(page.locator('.game-frame')).toHaveAttribute(
+    'data-screen',
+    'presentation',
+  );
+
+  const beforeStart = await page.evaluate(async () => {
+    const context = (
+      document as Document & {
+        modelContext: {
+          tools: Map<string, { execute(input: unknown): unknown }>;
+        };
+      }
+    ).modelContext;
+    const state = await context.tools.get('read_match_state')?.execute({});
+    try {
+      await context.tools
+        .get('throw_banana')
+        ?.execute({ dragEndX: 10, dragEndY: 10 });
+      return { state, error: '' };
+    } catch (error) {
+      return { state, error: String(error) };
+    }
+  });
+  expect(beforeStart.state).toMatchObject({
+    screen: 'presentation',
+    activePlayer: 1,
+    phase: 'aiming',
+  });
+  expect(beforeStart.error).toContain('Start the game');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
 
   const result = await page.evaluate(async () => {
     const context = (
@@ -143,6 +219,7 @@ test('the second player can grab from the full visible inner aiming circle', asy
   page,
 }) => {
   await page.goto('/?seed=4242');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
   const frame = page.locator('.game-frame');
   await expect(page.getByText('BUILDING CITY')).toBeHidden();
   const state = createGame(4242);

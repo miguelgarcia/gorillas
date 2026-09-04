@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import manifest from '../../public/themes/storm/theme.json';
 import { createGame, GAME_CONFIG } from './core';
-import { getFlagMotion, getGorillaPose } from './render';
+import { GameRenderer, getFlagMotion, getGorillaPose } from './render';
 
 describe('flag motion', () => {
   it('hangs slack in calm air and waves faster as the wind strengthens', () => {
@@ -31,6 +32,58 @@ describe('flag motion', () => {
 });
 
 describe('gorilla poses', () => {
+  it('draws the preview without an aiming ring or any game-state mutation', () => {
+    const noop = vi.fn();
+    const arc = vi.fn();
+    const context = {
+      arc,
+      beginPath: noop,
+      clearRect: noop,
+      closePath: noop,
+      createLinearGradient: () => ({ addColorStop: noop }),
+      drawImage: noop,
+      fill: noop,
+      fillRect: noop,
+      lineTo: noop,
+      moveTo: noop,
+      restore: noop,
+      rotate: noop,
+      save: noop,
+      scale: noop,
+      setLineDash: noop,
+      stroke: noop,
+      translate: noop,
+    } as unknown as CanvasRenderingContext2D;
+    vi.stubGlobal('document', {
+      createElement: () => ({ getContext: () => context }),
+    });
+    try {
+      const game = createGame(4242);
+      const before = structuredClone(game);
+      const { id, name, palette, sprites } = manifest;
+      const theme = { id, name, palette, sprites };
+      const renderer = new GameRenderer();
+      renderer.draw(context, game, theme, null, true);
+      expect(arc).not.toHaveBeenCalled();
+      expect(game).toEqual(before);
+      renderer.draw(context, game, theme, null);
+      expect(arc).toHaveBeenCalledTimes(3);
+      expect(game).toEqual(before);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps both gorillas idle in the presentation without changing the match', () => {
+    const game = createGame(4242);
+    const before = structuredClone(game);
+    for (const gorilla of game.match.gorillas) {
+      expect(getGorillaPose(game, gorilla, true)).toBe('idle');
+    }
+    expect(game).toEqual(before);
+    expect(getGorillaPose(game, game.match.gorillas[0])).toBe('aim');
+  });
+
   it('maps the active player through aiming and throwing poses', () => {
     const game = createGame(4242);
     const active = game.match.gorillas[game.match.activePlayer];

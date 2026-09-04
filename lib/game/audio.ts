@@ -11,6 +11,11 @@ const MUSIC_CHORDS = [
 const ARPEGGIO = [0, 1, 2, 1, 3, 2, 1, 2] as const;
 
 type AudioContextConstructor = new () => AudioContext;
+export type AudioPlaybackState =
+  | 'waiting'
+  | 'playing'
+  | 'muted'
+  | 'unavailable';
 
 function midiToFrequency(note: number) {
   return 440 * 2 ** ((note - 69) / 12);
@@ -34,59 +39,118 @@ export class GameAudio {
   private musicStep = 0;
   private enabled = true;
   private destroyed = false;
+  private unavailable = false;
+  private listeners = new Set<(state: AudioPlaybackState) => void>();
 
   get isEnabled() {
     return this.enabled;
   }
 
+  get playbackState(): AudioPlaybackState {
+    if (this.unavailable || this.destroyed) return 'unavailable';
+    if (!this.enabled) return 'muted';
+    return this.context?.state === 'running' && this.scheduler !== null
+      ? 'playing'
+      : 'waiting';
+  }
+
+  subscribe(listener: (state: AudioPlaybackState) => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify() {
+    this.listeners.forEach((listener) => listener(this.playbackState));
+  }
+
   async unlock() {
-    if (!this.enabled || this.destroyed) return false;
+    if (!this.enabled || this.destroyed || this.unavailable) return false;
 
-    if (!this.context) {
-      const AudioContextClass = audioContextConstructor();
-      if (!AudioContextClass) return false;
+    try {
+      if (!this.context) {
+        const AudioContextClass = audioContextConstructor();
+        if (!AudioContextClass) {
+          this.unavailable = true;
+          this.notify();
+          return false;
+        }
 
-      const context = new AudioContextClass();
-      const master = context.createGain();
-      const compressor = context.createDynamicsCompressor();
-      this.musicBus = context.createGain();
-      this.effectsBus = context.createGain();
+        const context = new AudioContextClass();
+        this.context = context;
+        const master = context.createGain();
+        const compressor = context.createDynamicsCompressor();
+        this.musicBus = context.createGain();
+        this.effectsBus = context.createGain();
 
-      master.gain.value = 0.72;
-      this.musicBus.gain.value = 0.16;
-      this.effectsBus.gain.value = 0.7;
-      compressor.threshold.value = -14;
-      compressor.knee.value = 12;
-      compressor.ratio.value = 5;
-      compressor.attack.value = 0.004;
-      compressor.release.value = 0.18;
+        master.gain.value = 0.72;
+        this.musicBus.gain.value = 0.16;
+        this.effectsBus.gain.value = 0.7;
+        compressor.threshold.value = -14;
+        compressor.knee.value = 12;
+        compressor.ratio.value = 5;
+        compressor.attack.value = 0.004;
+        compressor.release.value = 0.18;
 
-      this.musicBus.connect(master);
-      this.effectsBus.connect(master);
-      master.connect(compressor);
-      compressor.connect(context.destination);
-      this.context = context;
+        this.musicBus.connect(master);
+        this.effectsBus.connect(master);
+        master.connect(compressor);
+        compressor.connect(context.destination);
+        context.onstatechange = () => {
+          if (this.destroyed || this.context !== context) return;
+          if (context.state === 'running' && this.enabled) this.startMusic();
+          else this.stopMusic();
+          this.notify();
+        };
+      }
+    } catch {
+      this.unavailable = true;
+      this.stopMusic();
+      if (this.context) {
+        this.context.onstatechange = null;
+        void this.context.close().catch(() => {});
+      }
+      this.context = null;
+      this.musicBus = null;
+      this.effectsBus = null;
+      this.notify();
+      return false;
     }
 
-    if (this.context.state === 'suspended') {
+    const context = this.context;
+    if (context.state !== 'running' && context.state !== 'closed') {
       try {
-        await this.context.resume();
+        // Retry from each gesture: an autoplay resume may remain pending until
+        // the browser receives user activation.
+        await context.resume();
       } catch {
+        if (!this.destroyed) this.notify();
         return false;
       }
     }
 
-    if (this.context.state !== 'running') return false;
+    if (this.destroyed || !this.enabled || this.context !== context)
+      return false;
+    if (context.state !== 'running') {
+      this.notify();
+      return false;
+    }
     this.startMusic();
+    this.notify();
     return true;
   }
 
   setEnabled(enabled: boolean) {
+    if (this.destroyed) return;
     this.enabled = enabled;
     const context = this.context;
     const musicBus = this.musicBus;
     const effectsBus = this.effectsBus;
-    if (!context || !musicBus || !effectsBus) return;
+    if (!context || !musicBus || !effectsBus) {
+      this.notify();
+      return;
+    }
 
     const now = context.currentTime;
     musicBus.gain.cancelScheduledValues(now);
@@ -104,6 +168,7 @@ export class GameAudio {
     } else {
       this.stopMusic();
     }
+    this.notify();
   }
 
   playShot() {
@@ -229,11 +294,13 @@ export class GameAudio {
     this.destroyed = true;
     this.stopMusic();
     if (this.context && this.context.state !== 'closed') {
-      void this.context.close();
+      this.context.onstatechange = null;
+      void this.context.close().catch(() => {});
     }
     this.context = null;
     this.musicBus = null;
     this.effectsBus = null;
+    this.listeners.clear();
   }
 
   private async withRunningContext(
@@ -245,14 +312,20 @@ export class GameAudio {
   }
 
   private startMusic() {
-    if (this.scheduler || !this.context || !this.enabled) return;
+    if (
+      this.scheduler !== null ||
+      !this.context ||
+      !this.enabled ||
+      this.destroyed
+    )
+      return;
     this.nextMusicNote = this.context.currentTime + 0.045;
     this.scheduleMusic();
     this.scheduler = setInterval(() => this.scheduleMusic(), 50);
   }
 
   private stopMusic() {
-    if (this.scheduler) clearInterval(this.scheduler);
+    if (this.scheduler !== null) clearInterval(this.scheduler);
     this.scheduler = null;
   }
 
@@ -262,6 +335,10 @@ export class GameAudio {
     if (!context || !musicBus || context.state !== 'running' || !this.enabled) {
       return;
     }
+
+    // Background tabs may throttle timers; resume at the present rather than
+    // scheduling an entire backlog of notes in the past.
+    this.nextMusicNote = Math.max(this.nextMusicNote, context.currentTime);
 
     while (this.nextMusicNote < context.currentTime + MUSIC_LOOKAHEAD_SECONDS) {
       const chord =
