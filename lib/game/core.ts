@@ -26,6 +26,8 @@ export const GAME_CONFIG = {
 } as const;
 
 export type PlayerId = 0 | 1;
+export type GameMode = 'local' | 'single-player';
+export type Difficulty = 'easy' | 'normal' | 'hard';
 export type Point = { x: number; y: number };
 
 export type Building = {
@@ -73,6 +75,7 @@ export type TerrainMask = {
 };
 
 export type MatchState = {
+  shotNumber: number;
   seed: number;
   wind: number;
   elapsed: number;
@@ -90,6 +93,8 @@ export type MatchState = {
 };
 
 export type GameState = {
+  mode: GameMode;
+  difficulty: Difficulty;
   baseSeed: number;
   matchNumber: number;
   nextStarter: PlayerId;
@@ -318,6 +323,7 @@ function createMatch(seed: number, activePlayer: PlayerId): MatchState {
     buildings[0];
 
   return {
+    shotNumber: 0,
     seed,
     wind: (random() * 2 - 1) * GAME_CONFIG.windMax,
     elapsed: 0,
@@ -335,9 +341,14 @@ function createMatch(seed: number, activePlayer: PlayerId): MatchState {
   };
 }
 
-export function createGame(seed: number): GameState {
+export function createGame(
+  seed: number,
+  options: { mode?: GameMode; difficulty?: Difficulty } = {},
+): GameState {
   const normalizedSeed = seed >>> 0 || 1;
   return {
+    mode: options.mode ?? 'local',
+    difficulty: options.difficulty ?? 'normal',
     baseSeed: normalizedSeed,
     matchNumber: 1,
     nextStarter: 1,
@@ -382,12 +393,16 @@ export function shotStrength(gorilla: Gorilla, pointer: Point) {
 }
 
 export function canStartAim(game: GameState, point: Point) {
-  if (game.match.phase !== 'aiming') return false;
+  if (game.match.phase !== 'aiming' || isComputerTurn(game)) return false;
   const center = gorillaCenter(game.match.gorillas[game.match.activePlayer]);
   return (
     Math.hypot(point.x - center.x, point.y - center.y) <=
     GAME_CONFIG.aimStartRadius
   );
+}
+
+export function isComputerTurn(game: GameState) {
+  return game.mode === 'single-player' && game.match.activePlayer === 1;
 }
 
 export function launchBanana(game: GameState, pointer: Point): GameState {
@@ -419,6 +434,7 @@ export function launchBanana(game: GameState, pointer: Point): GameState {
     match: {
       ...match,
       phase: 'projectile-flight',
+      shotNumber: match.shotNumber + 1,
       phaseElapsed: 0,
       projectile,
       explosion: null,
@@ -607,6 +623,13 @@ export function stepGame(game: GameState, delta: number): GameState {
     elapsed: game.match.elapsed + boundedDelta,
   };
   const advanced = { ...game, match };
+
+  if (match.phase === 'aiming') {
+    return {
+      ...advanced,
+      match: { ...match, phaseElapsed: match.phaseElapsed + boundedDelta },
+    };
+  }
 
   if (match.phase === 'projectile-flight') {
     return updateProjectile(advanced, boundedDelta);

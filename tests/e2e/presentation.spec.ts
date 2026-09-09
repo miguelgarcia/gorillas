@@ -54,7 +54,12 @@ test('waits for actual assets and never auto-starts or accepts pre-start input',
   const start = page.getByRole('button', { name: 'Start', exact: true });
   await expect(page.getByText('BUILDING CITY')).toBeVisible();
   await expect(start).toBeDisabled();
-  await page.screenshot({ path: testInfo.outputPath('loading.png') });
+  // This can run before hydration. Caret hiding would mutate input styles in
+  // the server HTML and cause a screenshot-induced hydration warning.
+  await page.screenshot({
+    path: testInfo.outputPath('loading.png'),
+    caret: 'initial',
+  });
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');
   await expect(frame).toHaveAttribute('data-screen', 'loading');
@@ -139,6 +144,10 @@ for (const key of ['Enter', 'Space']) {
     await expect(page.locator('.sound-toggle')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: /Visit repo/ })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(
+      page.getByRole('radio', { name: /Two players/ }),
+    ).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(start).toBeFocused();
     await page.keyboard.press(key);

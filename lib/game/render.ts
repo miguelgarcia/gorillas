@@ -2,6 +2,7 @@ import {
   createRandom,
   GAME_CONFIG,
   gorillaCenter,
+  isComputerTurn,
   shotStrength,
   type Building,
   type GameState,
@@ -661,7 +662,7 @@ function drawAimingRing(
   theme: GameTheme,
   pointer: Point | null,
 ) {
-  if (game.match.phase !== 'aiming') return;
+  if (game.match.phase !== 'aiming' || isComputerTurn(game)) return;
   const gorilla = game.match.gorillas[game.match.activePlayer];
   const centerWorld = gorillaCenter(gorilla);
   const center = worldToScreen(centerWorld);

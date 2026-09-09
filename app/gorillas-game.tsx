@@ -15,14 +15,17 @@ import {
 import {
   canStartAim,
   createGame,
+  isComputerTurn,
   launchBanana,
   resetScores,
   startRematch,
-  stepGame,
+  type Difficulty,
+  type GameMode,
   type GameState,
   type PlayerId,
   type Point,
 } from '@/lib/game/core';
+import { stepSession } from '@/lib/game/computer';
 import {
   GameRenderer,
   screenToWorld,
@@ -57,6 +60,8 @@ type WebMcpContext = {
 };
 
 type UiSnapshot = {
+  mode: GameMode;
+  difficulty: Difficulty;
   activePlayer: PlayerId;
   matchNumber: number;
   phase: GameState['match']['phase'];
@@ -66,6 +71,8 @@ type UiSnapshot = {
 
 function snapshot(game: GameState): UiSnapshot {
   return {
+    mode: game.mode,
+    difficulty: game.difficulty,
     activePlayer: game.match.activePlayer,
     matchNumber: game.matchNumber,
     phase: game.match.phase,
@@ -76,6 +83,8 @@ function snapshot(game: GameState): UiSnapshot {
 
 function snapshotKey(value: UiSnapshot) {
   return [
+    value.mode,
+    value.difficulty,
     value.activePlayer,
     value.matchNumber,
     value.phase,
@@ -102,6 +111,7 @@ function initialSeed() {
 
 export function GorillasGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const startButtonRef = useRef<HTMLButtonElement>(null);
   const rendererRef = useRef(new GameRenderer());
   const gameRef = useRef(INITIAL_GAME);
   const aimingRef = useRef(false);
@@ -112,6 +122,8 @@ export function GorillasGame() {
   const screenRef = useRef<PageState>('loading');
   const accumulatorRef = useRef(0);
   const [screen, setScreen] = useState<PageState>('loading');
+  const [mode, setMode] = useState<GameMode>('local');
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [theme, setTheme] = useState<GameTheme | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [audioState, setAudioState] = useState<AudioPlaybackState>('waiting');
@@ -154,6 +166,10 @@ export function GorillasGame() {
 
   useEffect(() => {
     resetOpenRef.current = resetOpen;
+    if (resetOpen) {
+      aimingRef.current = false;
+      pointerRef.current = null;
+    }
   }, [resetOpen]);
 
   useEffect(() => {
@@ -208,10 +224,12 @@ export function GorillasGame() {
         accumulatorRef.current += frameDelta;
         while (accumulatorRef.current >= FIXED_TIMESTEP) {
           const previous = gameRef.current;
-          const next = stepGame(previous, FIXED_TIMESTEP);
+          const next = stepSession(previous, FIXED_TIMESTEP);
           gameRef.current = next;
           if (next.match.phase !== previous.match.phase) {
-            if (next.match.phase === 'impact' && next.match.explosion) {
+            if (next.match.phase === 'projectile-flight') {
+              getAudio().playShot();
+            } else if (next.match.phase === 'impact' && next.match.explosion) {
               getAudio().playExplosion(next.match.explosion.kind);
             } else if (
               next.match.phase === 'victory' &&
@@ -243,13 +261,25 @@ export function GorillasGame() {
 
   const beginGame = useCallback(() => {
     if (screenRef.current !== 'presentation') return;
+    gameRef.current = { ...gameRef.current, mode, difficulty };
     aimingRef.current = false;
     pointerRef.current = null;
     accumulatorRef.current = 0;
     changeScreen('playing');
+    syncUi();
     void getAudio().unlock();
     canvasRef.current?.focus();
-  }, [changeScreen, getAudio]);
+  }, [changeScreen, difficulty, getAudio, mode, syncUi]);
+
+  const returnToMenu = useCallback(() => {
+    aimingRef.current = false;
+    pointerRef.current = null;
+    accumulatorRef.current = 0;
+    gameRef.current = createGame(initialSeed());
+    changeScreen('presentation');
+    syncUi();
+    requestAnimationFrame(() => startButtonRef.current?.focus());
+  }, [changeScreen, syncUi]);
 
   const beginRematch = useCallback(() => {
     if (screenRef.current !== 'playing' || resetOpenRef.current) return;
@@ -288,7 +318,7 @@ export function GorillasGame() {
       name: 'read_match_state',
       title: 'Read match state',
       description:
-        'Read the active player, phase, scores, wind indicators, and gorilla positions in the current local match.',
+        'Read the mode, difficulty, active controller, phase, scores, wind indicators, and gorilla positions in the current match.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -298,9 +328,13 @@ export function GorillasGame() {
       execute() {
         const game = gameRef.current;
         return {
+          mode: game.mode,
+          difficulty: game.difficulty,
+          controller: isComputerTurn(game) ? 'computer' : 'human',
           screen: screenRef.current,
           activePlayer: game.match.activePlayer + 1,
           phase: game.match.phase,
+          shotNumber: game.match.shotNumber,
           scores: { p1: game.scores[0], p2: game.scores[1] },
           gorillas: game.match.gorillas.map((gorilla) => ({
             player: gorilla.player + 1,
@@ -328,7 +362,7 @@ export function GorillasGame() {
       name: 'throw_banana',
       title: 'Throw banana',
       description:
-        'Release a drag at a world-space point to throw for the active player. The launch travels opposite the drag and strength is capped by the game.',
+        'Release a drag at a world-space point to throw for the active human player. Computer turns cannot be controlled. The launch travels opposite the drag and strength is capped by the game.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -366,6 +400,11 @@ export function GorillasGame() {
         if (gameRef.current.match.phase !== 'aiming') {
           throw new Error(
             'A banana can only be thrown during the aiming phase.',
+          );
+        }
+        if (isComputerTurn(gameRef.current)) {
+          throw new Error(
+            'Wait for your turn. The computer controls this gorilla.',
           );
         }
         const next = launchBanana(gameRef.current, {
@@ -413,7 +452,8 @@ export function GorillasGame() {
         setResetOpen(true);
       } else if (
         event.key === 'Enter' &&
-        gameRef.current.match.phase === 'victory'
+        gameRef.current.match.phase === 'victory' &&
+        !(event.target instanceof HTMLButtonElement)
       ) {
         event.preventDefault();
         beginRematch();
@@ -429,6 +469,21 @@ export function GorillasGame() {
       y: event.clientY,
     });
 
+  const solo = ui.mode === 'single-player';
+  const computerTurn = solo && ui.activePlayer === 1;
+  const playerLabel = (player: PlayerId) =>
+    solo ? (player === 0 ? 'YOU' : 'CPU') : `P${player + 1}`;
+  const turnMessage =
+    ui.phase === 'aiming'
+      ? computerTurn
+        ? 'CPU is lining up a throw…'
+        : solo
+          ? 'Your turn · Drag from your gorilla’s ring'
+          : `${playerLabel(ui.activePlayer)} · Drag from the ring`
+      : ui.phase === 'victory'
+        ? 'Click or press Enter for a rematch'
+        : `${playerLabel(ui.activePlayer)} ${ui.phase === 'projectile-flight' ? 'banana in flight' : 'throw complete'}`;
+
   const themeStyle = theme
     ? ({
         '--p1': theme.palette.p1,
@@ -441,7 +496,12 @@ export function GorillasGame() {
   return (
     <section
       className="game-frame"
-      aria-label="Gorillas local hot-seat game"
+      aria-label={
+        solo ? 'Gorillas single-player game' : 'Gorillas local hot-seat game'
+      }
+      data-mode={ui.mode}
+      data-difficulty={ui.difficulty}
+      data-controller={computerTurn ? 'computer' : 'human'}
       data-active-player={ui.activePlayer + 1}
       data-match-number={ui.matchNumber}
       data-phase={ui.phase}
@@ -450,11 +510,29 @@ export function GorillasGame() {
     >
       {screen === 'playing' ? (
         <div className="scoreboard" aria-live="polite" aria-atomic="true">
-          <span className="player-one">P1</span>
+          <span className="player-one">{playerLabel(0)}</span>
           <strong>{ui.scores[0]}</strong>
           <span aria-hidden="true">—</span>
           <strong>{ui.scores[1]}</strong>
-          <span className="player-two">P2</span>
+          <span className="player-two">{playerLabel(1)}</span>
+        </div>
+      ) : null}
+
+      {screen === 'playing' ? (
+        <div className="session-controls">
+          <button
+            type="button"
+            className="menu-button"
+            title="End this session and choose a mode. Scores will reset."
+            onClick={returnToMenu}
+          >
+            Menu
+          </button>
+          <span>
+            {solo
+              ? `SOLO · ${ui.difficulty.toUpperCase()}`
+              : 'LOCAL · 2 PLAYERS'}
+          </span>
         </div>
       ) : null}
 
@@ -507,7 +585,71 @@ export function GorillasGame() {
             >
               Visit repo<span className="sr-only"> (opens in a new tab)</span>
             </a>
+            <fieldset
+              className="mode-picker"
+              disabled={screen !== 'presentation'}
+            >
+              <legend>Choose your match</legend>
+              <label
+                htmlFor="mode-single-player"
+                aria-label="Single player, you vs. the computer"
+              >
+                <input
+                  id="mode-single-player"
+                  type="radio"
+                  name="mode"
+                  value="single-player"
+                  checked={mode === 'single-player'}
+                  onChange={() => setMode('single-player')}
+                />
+                <span>
+                  <strong>Single player</strong>
+                  <small>You vs. the computer</small>
+                </span>
+              </label>
+              <label
+                htmlFor="mode-local"
+                aria-label="Two players, share the keyboard and mouse"
+              >
+                <input
+                  id="mode-local"
+                  type="radio"
+                  name="mode"
+                  value="local"
+                  checked={mode === 'local'}
+                  onChange={() => setMode('local')}
+                />
+                <span>
+                  <strong>Two players</strong>
+                  <small>Share the keyboard & mouse</small>
+                </span>
+              </label>
+            </fieldset>
+            {mode === 'single-player' ? (
+              <div className="difficulty-picker">
+                <label htmlFor="difficulty">Difficulty</label>
+                <select
+                  id="difficulty"
+                  value={difficulty}
+                  onChange={(event) =>
+                    setDifficulty(event.target.value as Difficulty)
+                  }
+                >
+                  <option value="easy">Easy</option>
+                  <option value="normal">Normal</option>
+                  <option value="hard">Hard</option>
+                </select>
+                <span>
+                  {difficulty === 'easy'
+                    ? 'Room to practice your aim.'
+                    : difficulty === 'normal'
+                      ? 'A rival with a few misses.'
+                      : 'A sharper aim. Make yours count.'}
+                </span>
+              </div>
+            ) : null}
             <Button
+              ref={startButtonRef}
               className="start-button"
               disabled={screen !== 'presentation'}
               onClick={beginGame}
@@ -523,7 +665,9 @@ export function GorillasGame() {
               <output className="presentation-status">
                 {screen === 'loading'
                   ? 'BUILDING CITY'
-                  : 'Two players. One skyline. One banana.'}
+                  : mode === 'single-player'
+                    ? 'You, the computer, and one very explosive banana.'
+                    : 'Two players. One skyline. One banana.'}
               </output>
             )}
           </div>
@@ -539,7 +683,7 @@ export function GorillasGame() {
         aria-hidden={screen !== 'playing'}
         aria-label={
           screen === 'playing'
-            ? `Windy city arena. P${ui.activePlayer + 1} is active. Drag from the highlighted gorilla to aim.`
+            ? `Windy city arena. ${turnMessage}.`
             : 'Windy city preview'
         }
         onPointerDown={(event) => {
@@ -549,6 +693,7 @@ export function GorillasGame() {
             beginRematch();
             return;
           }
+          if (isComputerTurn(gameRef.current)) return;
           const point = toWorld(event);
           if (canStartAim(gameRef.current, point)) {
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -562,7 +707,7 @@ export function GorillasGame() {
         }}
         onPointerUp={(event) => {
           if (screenRef.current !== 'playing' || resetOpenRef.current) return;
-          if (!aimingRef.current) return;
+          if (!aimingRef.current || isComputerTurn(gameRef.current)) return;
           const point = toWorld(event);
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
@@ -586,11 +731,19 @@ export function GorillasGame() {
           type="button"
           className="victory-overlay"
           onClick={beginRematch}
-          aria-label={`Player ${ui.winner + 1} wins. Click or press Enter for a rematch.`}
+          aria-label={`${playerLabel(ui.winner)} wins. Click or press Enter for a rematch.`}
         >
-          <span>P{ui.winner + 1} WINS</span>
+          <span>
+            {solo && ui.winner === 0
+              ? 'YOU WIN'
+              : `${playerLabel(ui.winner)} WINS`}
+          </span>
           <small>CLICK OR PRESS ENTER</small>
         </button>
+      ) : null}
+
+      {screen === 'playing' ? (
+        <output className="turn-status">{turnMessage}</output>
       ) : null}
 
       {screen === 'playing' ? (

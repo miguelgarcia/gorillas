@@ -9,11 +9,11 @@ export const metadata: Metadata = {
   alternates: { canonical: siteUrl },
   title: 'Gorillas — Rooftop Artillery',
   description:
-    'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
+    'Play rooftop artillery solo against the computer or with a friend, with wind, destructible skylines, and mouse-driven aiming.',
   openGraph: {
     title: 'Gorillas — Rooftop Artillery',
     description:
-      'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
+      'Play rooftop artillery solo against the computer or with a friend, with wind, destructible skylines, and mouse-driven aiming.',
     type: 'website',
     url: siteUrl,
     images: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Gorillas — Rooftop Artillery',
     description:
-      'A local two-player rooftop artillery game with wind, destructible skylines, and mouse-driven aiming.',
+      'Play rooftop artillery solo against the computer or with a friend, with wind, destructible skylines, and mouse-driven aiming.',
     images: [`${siteUrl}/og.png`],
   },
 };
