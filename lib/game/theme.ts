@@ -1,3 +1,5 @@
+import { parseLightingPresets, type LightingPreset } from './lighting';
+
 export type PixelSprite = {
   rows: string[];
   colors: Record<string, string>;
@@ -50,6 +52,7 @@ export type GameTheme = {
     flag: PixelSprite;
   };
   gorillaSheet?: GorillaSpriteSheet;
+  lightingPresets?: LightingPreset[];
 };
 
 type GorillaSpriteSheetConfig = Omit<GorillaSpriteSheet, 'image'>;
@@ -103,7 +106,11 @@ export async function loadTheme(url: string): Promise<GameTheme> {
   }
   const value: unknown = await response.json();
   if (!isTheme(value)) throw new Error('Theme manifest is incomplete');
-  const { gorillaSheet, ...theme } = value;
+  const { gorillaSheet, lightingPresets, ...baseTheme } = value;
+  const theme: GameTheme = {
+    ...baseTheme,
+    lightingPresets: parseLightingPresets(lightingPresets),
+  };
   if (!gorillaSheet) return theme;
   const imageUrl = new URL(gorillaSheet.src, response.url).href;
   return {

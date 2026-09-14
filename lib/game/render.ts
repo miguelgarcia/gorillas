@@ -9,6 +9,7 @@ import {
   type Gorilla,
   type Point,
 } from './core';
+import { resolveLightingTheme } from './lighting';
 import type { GameTheme, GorillaPose, PixelSprite } from './theme';
 
 export const VIEW_WIDTH = 1600;
@@ -945,10 +946,28 @@ function drawBuilding(
 export class GameRenderer {
   private terrainLayer: HTMLCanvasElement | null = null;
   private terrainKey = '';
+  private terrainTheme: GameTheme | null = null;
+  private sourceTheme: GameTheme | null = null;
+  private lightingSeed: number | null = null;
+  private lightingTheme: GameTheme | null = null;
+
+  private getLightingTheme(theme: GameTheme, seed: number) {
+    if (this.sourceTheme !== theme || this.lightingSeed !== seed) {
+      this.sourceTheme = theme;
+      this.lightingSeed = seed;
+      this.lightingTheme = resolveLightingTheme(theme, seed);
+    }
+    return this.lightingTheme!;
+  }
 
   private getTerrainLayer(game: GameState, theme: GameTheme) {
     const key = `${game.match.seed}:${game.match.craters.length}:${theme.id}`;
-    if (this.terrainLayer && this.terrainKey === key) return this.terrainLayer;
+    if (
+      this.terrainLayer &&
+      this.terrainKey === key &&
+      this.terrainTheme === theme
+    )
+      return this.terrainLayer;
 
     const layer = document.createElement('canvas');
     layer.width = VIEW_WIDTH;
@@ -964,6 +983,7 @@ export class GameRenderer {
 
     this.terrainLayer = layer;
     this.terrainKey = key;
+    this.terrainTheme = theme;
     return layer;
   }
 
@@ -974,6 +994,7 @@ export class GameRenderer {
     pointer: Point | null,
     presentation = false,
   ) {
+    theme = this.getLightingTheme(theme, game.match.seed);
     context.clearRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
     context.imageSmoothingEnabled = false;
     drawSky(context, game, theme);
