@@ -25,6 +25,63 @@
     "panel": "rgba(18, 29, 36, 0.84)",
     "panelBorder": "rgba(220, 238, 239, 0.28)"
   },
+  "lightingPresets": [
+    {
+      "id": "overcast",
+      "palette": {}
+    },
+    {
+      "id": "dawn",
+      "palette": {
+        "skyTop": "#626d98",
+        "skyBottom": "#edbea3",
+        "cloudFar": "#a89fb6",
+        "cloudNear": "#e9ccd0",
+        "distantCity": "#696c86",
+        "buildingOutline": "#30313f",
+        "facades": ["#a36b65", "#688c85", "#bc985d", "#7a879a", "#8e9467"],
+        "windowDark": "#4a586c",
+        "windowLit": "#ffe0a1",
+        "ground": "#242631",
+        "groundEdge": "#61606d",
+        "craterRim": "#292734"
+      }
+    },
+    {
+      "id": "sunset",
+      "palette": {
+        "skyTop": "#78506e",
+        "skyBottom": "#eca066",
+        "cloudFar": "#a47283",
+        "cloudNear": "#f0b18e",
+        "distantCity": "#68506c",
+        "buildingOutline": "#352a36",
+        "facades": ["#ad614d", "#6d7970", "#c28b45", "#7d6d81", "#959052"],
+        "windowDark": "#584552",
+        "windowLit": "#ffdb7b",
+        "ground": "#28202c",
+        "groundEdge": "#63505c",
+        "craterRim": "#2b212d"
+      }
+    },
+    {
+      "id": "moonlit",
+      "palette": {
+        "skyTop": "#202e50",
+        "skyBottom": "#627d9d",
+        "cloudFar": "#546887",
+        "cloudNear": "#91a4be",
+        "distantCity": "#384e6d",
+        "buildingOutline": "#182338",
+        "facades": ["#665366", "#486575", "#7f7557", "#566a87", "#626e65"],
+        "windowDark": "#293b55",
+        "windowLit": "#f3d286",
+        "ground": "#111b2b",
+        "groundEdge": "#3b4f6a",
+        "craterRim": "#101a2b"
+      }
+    }
+  ],
   "sprites": {
     "gorilla": {
       "colors": {

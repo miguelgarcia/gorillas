@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import manifest from '../../public/themes/storm/theme.json';
-import { createGame, GAME_CONFIG } from './core';
+import { createGame, GAME_CONFIG, startRematch } from './core';
 import { GameRenderer, getFlagMotion, getGorillaPose } from './render';
 
 describe('flag motion', () => {
@@ -113,5 +113,101 @@ describe('gorilla poses', () => {
       ),
     ).toBe('victory');
     expect(getGorillaPose(game, defeated)).toBe('hit');
+  });
+});
+
+describe('lighting and terrain caching', () => {
+  it('draws matching sky/terrain palettes and refreshes only when needed', () => {
+    function recordingContext() {
+      const colors: string[] = [];
+      const noop = vi.fn();
+      const context = {
+        fillStyle: '',
+        fillRect(this: CanvasRenderingContext2D) {
+          if (typeof this.fillStyle === 'string') colors.push(this.fillStyle);
+        },
+        createLinearGradient: () => ({
+          addColorStop: (_stop: number, color: string) => colors.push(color),
+        }),
+        arc: noop,
+        beginPath: noop,
+        clearRect: noop,
+        closePath: noop,
+        drawImage: noop,
+        fill: noop,
+        lineTo: noop,
+        moveTo: noop,
+        restore: noop,
+        rotate: noop,
+        save: noop,
+        scale: noop,
+        setLineDash: noop,
+        stroke: noop,
+        translate: noop,
+      } as unknown as CanvasRenderingContext2D;
+      return { context, colors };
+    }
+    const main = recordingContext();
+    const layers: ReturnType<typeof recordingContext>[] = [];
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const layer = recordingContext();
+        layers.push(layer);
+        return { getContext: () => layer.context };
+      },
+    });
+    try {
+      const { id, name, palette, sprites } = manifest;
+      const theme = {
+        id,
+        name,
+        palette,
+        sprites,
+        lightingPresets: [
+          { id: 'test', palette: { skyTop: '#123456', facades: ['#abcdef'] } },
+        ],
+      };
+      const game = createGame(4242);
+      const before = structuredClone(game);
+      const renderer = new GameRenderer();
+      renderer.draw(main.context, game, theme, null, true);
+      expect(main.colors).toContain('#123456');
+      expect(layers[0].colors).toContain('#abcdef');
+      renderer.draw(
+        main.context,
+        { ...game, match: { ...game.match, elapsed: 1 } },
+        theme,
+        null,
+      );
+      expect(layers).toHaveLength(1);
+      expect(game).toEqual(before);
+
+      const replacement = {
+        ...theme,
+        lightingPresets: [
+          { id: 'test', palette: { skyTop: '#654321', facades: ['#fedcba'] } },
+        ],
+      };
+      main.colors.length = 0;
+      renderer.draw(main.context, game, replacement, null);
+      expect(main.colors).toContain('#654321');
+      expect(layers).toHaveLength(2);
+      expect(layers[1].colors).toContain('#fedcba');
+
+      const damaged = {
+        ...game,
+        match: { ...game.match, craters: [{ x: 50, y: 20, radius: 3 }] },
+      };
+      renderer.draw(main.context, damaged, replacement, null);
+      expect(layers).toHaveLength(3);
+      expect(layers[2].colors).toContain('#fedcba');
+      renderer.draw(main.context, damaged, replacement, null);
+      expect(layers).toHaveLength(3);
+      renderer.draw(main.context, startRematch(game), replacement, null);
+      expect(layers).toHaveLength(4);
+      expect(layers[3].colors).toContain('#fedcba');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
