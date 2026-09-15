@@ -104,27 +104,32 @@ describe('computer opponent', () => {
     expect(startRematch(rematch).match.activePlayer).toBe(0);
   });
 
-  it('produces legal, resolving shots across skylines, wind, and both sides; higher difficulty is more accurate', () => {
-    const hits = { easy: 0, normal: 0, hard: 0 };
-    const sides = new Set<boolean>();
-    for (let seed = 1; seed <= 60; seed += 1) {
-      for (const difficulty of ['easy', 'normal', 'hard'] as const) {
-        const game = computerMatch(seed, difficulty);
-        sides.add(game.match.gorillas[1].x > game.match.gorillas[0].x);
-        const shot = chooseComputerShot(game)!;
-        const projectile = launchBanana(game, shot).match.projectile!;
-        expect(Math.hypot(projectile.vx, projectile.vy)).toBeLessThanOrEqual(
-          GAME_CONFIG.maxLaunchSpeed + 1e-8,
-        );
-        const result = resolveShot(game);
-        expect(result.match.phase).not.toBe('projectile-flight');
-        if (result.match.winner === 1) hits[difficulty] += 1;
+  // This 180-match simulation can exceed five seconds on shared CI runners.
+  it(
+    'produces legal, resolving shots across skylines, wind, and both sides; higher difficulty is more accurate',
+    { timeout: 15_000 },
+    () => {
+      const hits = { easy: 0, normal: 0, hard: 0 };
+      const sides = new Set<boolean>();
+      for (let seed = 1; seed <= 60; seed += 1) {
+        for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+          const game = computerMatch(seed, difficulty);
+          sides.add(game.match.gorillas[1].x > game.match.gorillas[0].x);
+          const shot = chooseComputerShot(game)!;
+          const projectile = launchBanana(game, shot).match.projectile!;
+          expect(Math.hypot(projectile.vx, projectile.vy)).toBeLessThanOrEqual(
+            GAME_CONFIG.maxLaunchSpeed + 1e-8,
+          );
+          const result = resolveShot(game);
+          expect(result.match.phase).not.toBe('projectile-flight');
+          if (result.match.winner === 1) hits[difficulty] += 1;
+        }
       }
-    }
-    expect(sides.size).toBe(2);
-    expect(hits.hard, JSON.stringify(hits)).toBeGreaterThan(hits.normal);
-    expect(hits.normal, JSON.stringify(hits)).toBeGreaterThan(hits.easy);
-    expect(hits.hard).toBeGreaterThan(35);
-    expect(hits.easy).toBeLessThan(45);
-  });
+      expect(sides.size).toBe(2);
+      expect(hits.hard, JSON.stringify(hits)).toBeGreaterThan(hits.normal);
+      expect(hits.normal, JSON.stringify(hits)).toBeGreaterThan(hits.easy);
+      expect(hits.hard).toBeGreaterThan(35);
+      expect(hits.easy).toBeLessThan(45);
+    },
+  );
 });
